@@ -1,0 +1,2 @@
+rootProject.name = "multiplatfom-everything"
+
