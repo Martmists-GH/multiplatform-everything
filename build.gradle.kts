@@ -3,8 +3,8 @@ plugins {
     kotlin("plugin.serialization") version "2.0.20"
 }
 
-group = "com.martmists"
-version = "1.0-SNAPSHOT"
+group = "com.martmists.multiplatform"
+version = "1.0.0"
 
 repositories {
     mavenCentral()
