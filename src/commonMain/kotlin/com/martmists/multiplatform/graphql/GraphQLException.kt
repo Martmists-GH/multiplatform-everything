@@ -1,6 +1,6 @@
 package com.martmists.multiplatform.graphql
 
-import com.martmists.multiplatform.graphql.parser.Loc
+import com.martmists.multiplatform.validation.lexer.Loc
 
 class GraphQLException(val errors: List<GraphQLError>) : Exception() {
     constructor(error: GraphQLError) : this(listOf(error))

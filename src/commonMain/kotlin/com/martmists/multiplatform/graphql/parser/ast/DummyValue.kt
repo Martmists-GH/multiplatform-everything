@@ -1,7 +1,7 @@
 package com.martmists.multiplatform.graphql.parser.ast
 
 import com.martmists.multiplatform.graphql.SchemaRequestContext
-import com.martmists.multiplatform.graphql.parser.Loc
+import com.martmists.multiplatform.validation.lexer.Loc
 import kotlin.reflect.KType
 
 data class DummyValue(

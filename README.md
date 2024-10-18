@@ -9,6 +9,10 @@ Everything is licensed BSD 3-Clause (NON-AI), PRs are welcome.
 - Multiplatform WeakRef/WeakMap/WeakValueMap
 - Binary editing tools (ByteArray only)
 - Kotlinx.coroutines GraphQL implementation
+- Validation library
+  - Email
+  - URI
+  - Domain
 
 ## Maven artifacts
 

@@ -175,7 +175,7 @@ class SchemaBuilder {
     internal fun build(): Schema {
         for (type in requestedTypes) {
             if (!typeMap.containsKey(type) && !enumMap.containsKey(type)) {
-                if ((type.classifier as KClass<*>?)?.qualifiedName !in EXCLUDED_CLASSES.map { it.qualifiedName }) {
+                if ((type.classifier as KClass<*>?)?.simpleName !in EXCLUDED_CLASSES.map { it.simpleName }) {  // TODO: Switch to qualifiedName once supported in JS
                     throw IllegalStateException("Type $type was returned, but not defined in the schema!")
                 }
             }

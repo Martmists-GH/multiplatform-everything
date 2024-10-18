@@ -1,4 +1,4 @@
-package com.martmists.multiplatform.graphql.parser
+package com.martmists.multiplatform.validation.lexer
 
 abstract class Lexer(protected val contents: String) : Iterator<Char> {
     protected var i = 0
@@ -73,7 +73,7 @@ abstract class Lexer(protected val contents: String) : Iterator<Char> {
     protected fun <T> zeroOrMore(block: () -> T) = between(0..Int.MAX_VALUE, block)
     protected fun <T> oneOrMore(block: () -> T) = between(1..Int.MAX_VALUE, block)
     protected fun <T> repeated(n: Int, block: () -> T) = between(n..n, block)
-    protected fun <T> optional(block: () -> T) = between(0..1, block)
+    protected fun <T> optional(block: () -> T) = between(0..1, block).firstOrNull()
 
     protected fun <T> between(min: Int, max: Int, block: () -> T) = between(min..max, block)
     protected fun <T> between(range: IntRange, block: () -> T): List<T> {

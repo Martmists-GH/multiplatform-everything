@@ -193,8 +193,8 @@ class GraphQL {
             Boolean::class -> JsonPrimitive(obj as Boolean)
             else -> {
                 val kClass = type.classifier as KClass<*>
-                when (kClass.qualifiedName) {
-                    Array::class.qualifiedName -> buildJsonArray {
+                when (kClass.simpleName) {  // TODO: Switch to qualifiedName once supported in JS
+                    Array::class.simpleName -> buildJsonArray {
                         val argType = type.arguments.first().type!!
                         val argDef = schema.typeMap[argType]
                         val enumDef = schema.enumMap[argType]
@@ -202,7 +202,7 @@ class GraphQL {
                             add(mapJson(operation, item, argType, argDef, enumDef, emptyList()))
                         }
                     }
-                    List::class.qualifiedName -> buildJsonArray {
+                    List::class.simpleName -> buildJsonArray {
                         val argType = type.arguments.first().type!!
                         val argDef = schema.typeMap[argType]
                         val enumDef = schema.enumMap[argType]

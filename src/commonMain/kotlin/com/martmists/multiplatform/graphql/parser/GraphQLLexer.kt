@@ -1,6 +1,7 @@
 package com.martmists.multiplatform.graphql.parser
 
 import com.martmists.multiplatform.graphql.parser.ast.*
+import com.martmists.multiplatform.validation.lexer.Lexer
 import kotlin.math.pow
 
 class GraphQLLexer(contents: String) : Lexer(contents) {

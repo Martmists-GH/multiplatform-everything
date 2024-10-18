@@ -1,4 +1,4 @@
-package com.martmists.multiplatform.graphql.parser
+package com.martmists.multiplatform.validation.lexer
 
 data class Loc(
     val line: Int,

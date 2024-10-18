@@ -1,6 +1,6 @@
 package com.martmists.multiplatform.graphql.parser.ast
 
-import com.martmists.multiplatform.graphql.parser.Loc
+import com.martmists.multiplatform.validation.lexer.Loc
 
 data class Field(
     val alias: String?,
