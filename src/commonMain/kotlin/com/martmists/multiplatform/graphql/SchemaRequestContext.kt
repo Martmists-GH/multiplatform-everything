@@ -21,7 +21,7 @@ class SchemaRequestContext(
         return fields
     }
 
-    fun <T> variable(name: String): T {
+    internal fun <T> variable(name: String): T {
         return variables[name] as T
     }
 

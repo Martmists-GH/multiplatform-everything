@@ -1,5 +1,8 @@
 package com.martmists.multiplatform.binary
 
+/**
+ * The binary data type for an int.
+ */
 object IntData : BinaryData<Int> {
     override val size: Int = 4
     override fun parseLE(array: ByteArray, offset: Int): Int {

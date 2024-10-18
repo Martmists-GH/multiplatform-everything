@@ -1,5 +1,8 @@
 package com.martmists.multiplatform.binary
 
+/**
+ * The binary data type for a float.
+ */
 object FloatData : BinaryData<Float> {
     override val size: Int = 4
     override fun parseLE(array: ByteArray, offset: Int): Float {

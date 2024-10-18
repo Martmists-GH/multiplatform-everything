@@ -1,14 +1,14 @@
 package com.martmists.multiplatform.datastructure.impl
 
-import com.martmists.multiplatform.datastructure.MutableWeakMap
+import com.martmists.multiplatform.datastructure.WeakValueMap
 import com.martmists.multiplatform.datastructure.WeakRef
 
-internal class MutableWeakMapImpl<K : Any, V>(entries: Array<out Pair<K, V>>) : MutableWeakMap<K, V> {
-    private val backing = entries.associate { WeakRef(it.first) to it.second }.toMutableMap()
+internal class WeakValueMapImpl<K, V : Any>(entries: Array<out Pair<K, V>>) : WeakValueMap<K, V> {
+    private val backing = entries.associate { it.first to WeakRef(it.second) }.toMutableMap()
 
     private fun eraseStale() {
-        for (k in backing.keys) {
-            if (k.get() == null) {
+        for ((k, v) in backing.entries) {
+            if (v.get() == null) {
                 backing.remove(k)
             }
         }
@@ -22,7 +22,7 @@ internal class MutableWeakMapImpl<K : Any, V>(entries: Array<out Pair<K, V>>) : 
     override val keys: MutableSet<K>
         get() {
             eraseStale()
-            return backing.keys.map { it.get()!! }.toMutableSet()
+            return backing.keys
         }
     override val size: Int
         get() {
@@ -32,7 +32,7 @@ internal class MutableWeakMapImpl<K : Any, V>(entries: Array<out Pair<K, V>>) : 
     override val values: MutableCollection<V>
         get() {
             eraseStale()
-            return backing.values
+            return backing.values.map { it.get()!! }.toMutableSet()
         }
 
     override fun isEmpty(): Boolean {
@@ -46,44 +46,41 @@ internal class MutableWeakMapImpl<K : Any, V>(entries: Array<out Pair<K, V>>) : 
 
     override fun remove(key: K): V? {
         eraseStale()
-        val ref = backing.keys.firstOrNull { it.get() == key } ?: return null
-        return backing.remove(ref)
+        return backing.remove(key)?.get()
     }
 
     override fun putAll(from: Map<out K, V>) {
-        backing.putAll(from.map { (k, v) -> WeakRef(k) to v })
+        backing.putAll(from.map { (k, v) -> k to WeakRef(v) })
     }
 
     override fun put(key: K, value: V): V? {
         eraseStale()
-        val ref = backing.keys.firstOrNull { it.get() == key } ?: WeakRef(key)
-        return backing.put(ref, value)
+        return backing.put(key, WeakRef(value))?.get()
     }
 
     override fun get(key: K): V? {
         eraseStale()
-        val ref = backing.keys.firstOrNull { it.get() == key } ?: return null
-        return backing[ref]
+        return backing[key]?.get()
     }
 
     override fun containsValue(value: V): Boolean {
         eraseStale()
-        return backing.containsValue(value)
+        return backing.values.any { it.get() == value }
     }
 
     override fun containsKey(key: K): Boolean {
         eraseStale()
-        return backing.keys.any { it.get() == key }
+        return backing.containsKey(key)
     }
 
-    private class Entry<K : Any, V>(private val map: MutableWeakMapImpl<K, V>,
-                                    private val keyRef: WeakRef<K>,
-                                    override val value: V) : MutableMap.MutableEntry<K, V> {
+    private class Entry<K, V : Any>(private val map: WeakValueMapImpl<K, V>,
+                                    override val key: K,
+                                    valueRef: WeakRef<V>) : MutableMap.MutableEntry<K, V> {
         // Keep available while Entry is referenced
-        override val key = keyRef.get()!!
+        override val value = valueRef.get()!!
 
         override fun setValue(newValue: V): V {
-            map.backing[keyRef] = newValue
+            map.backing[key] = WeakRef(newValue)
             return value
         }
     }

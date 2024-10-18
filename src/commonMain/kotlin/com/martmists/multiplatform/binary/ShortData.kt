@@ -1,5 +1,8 @@
 package com.martmists.multiplatform.binary
 
+/**
+ * The binary data type for a short.
+ */
 object ShortData : BinaryData<Short> {
     override val size: Int = 2
     override fun parseLE(array: ByteArray, offset: Int): Short {

@@ -1,5 +1,8 @@
 package com.martmists.multiplatform.binary
 
+/**
+ * The binary data type for a long.
+ */
 object LongData : BinaryData<Long> {
     override val size: Int = 8
     override fun parseLE(array: ByteArray, offset: Int): Long {

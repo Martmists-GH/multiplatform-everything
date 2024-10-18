@@ -15,10 +15,27 @@ import kotlinx.serialization.json.*
 import kotlin.reflect.KClass
 import kotlin.reflect.KType
 
+/**
+ * A GraphQL Service.
+ *
+ * This is the entry point for all GraphQL operations.
+ */
 class GraphQL {
     private var didInit = false
     private lateinit var schema: Schema
 
+    /**
+     * A wrapper function for each property accessed.
+     *
+     * If you want everything to happen on a specific context or want to wrap it (for example, with Exposed's newSuspendedTransaction), you can set this property to do so.
+     */
+    var wrapper: suspend (content: suspend () -> Unit) -> Unit = { it() }
+
+    /**
+     * Builds the GraphQL Schema.
+     *
+     * @throws IllegalStateException If the schema has already been built, or a type is returned from a field that was not registered.
+     */
     fun schema(builder: SchemaBuilder.() -> Unit) {
         if (didInit) {
             throw IllegalStateException("Schema already built!")
@@ -29,6 +46,10 @@ class GraphQL {
         didInit = true
     }
 
+    /**
+     * Executes a GraphQL operation.
+     * This function takes a [JsonObject] to easily fit into any web application.
+     */
     suspend fun execute(payload: JsonObject): JsonElement {
         val document = payload["query"]!!.jsonPrimitive.content
         val operation = payload["operationName"]?.jsonPrimitive?.content
@@ -36,6 +57,14 @@ class GraphQL {
         return execute(document, operation, variables)
     }
 
+    /**
+     * Executes a GraphQL operation.
+     *
+     * @param document The GraphQL document.
+     * @param operation The name of the operation from the document to execute.
+     * @param data The variables to pass into the operation.
+     * @return The JSON output. On success, this will have a `data` key. On failure, this will have an `errors` key.
+     */
     suspend fun execute(document: String, operation: String?, data: Map<String, Any?>): JsonElement {
         val lexer = GraphQLLexer(document)
         val prog = lexer.parseExecutableDocument()
@@ -96,10 +125,12 @@ class GraphQL {
             coroutineScope {
                 for (field in operation.fields) {
                     launch {
-                        try {
-                            put(field.name, execute(operation, defMap[field.name] ?: throw GraphQLException("Cannoty query field \"${field.name}\" on type \"${operation.type}\".", field.loc), field))
-                        } catch (e: GraphQLException) {
-                            errors += e.errors
+                        wrapper {
+                            try {
+                                put(field.name, execute(operation, defMap[field.name] ?: throw GraphQLException("Cannoty query field \"${field.name}\" on type \"${operation.type}\".", field.loc), field))
+                            } catch (e: GraphQLException) {
+                                errors += e.errors
+                            }
                         }
                     }
                 }
@@ -184,36 +215,38 @@ class GraphQL {
                         coroutineScope {
                             for (field in fields) {
                                 launch {
-                                    try {
-                                        val prop = def!!.properties[field.name]!!
-                                        val ctx = operation.context.withArguments(field.arguments)
-                                        for ((argName, argType) in prop.arguments) {
-                                            if (ctx.vars[argName] == null && !argType.isMarkedNullable) {
-                                                throw GraphQLException("Field \"${field.name}\" argument \"$argName\" of type \"${argType.gqlName}\" is required but not provided.", field.loc)
-                                            }
-                                            if (ctx.vars[argName] != null) {
-                                                val argVar = ctx.vars[argName]!!
-                                                val argValue = argVar.on(ctx, argType)
-                                                if (argValue == null && !argType.isMarkedNullable) {
-                                                    throw GraphQLException("Expected type ${argType.gqlName}, found null.", argVar.loc)
+                                    wrapper {
+                                        try {
+                                            val prop = def!!.properties[field.name]!!
+                                            val ctx = operation.context.withArguments(field.arguments)
+                                            for ((argName, argType) in prop.arguments) {
+                                                if (ctx.vars[argName] == null && !argType.isMarkedNullable) {
+                                                    throw GraphQLException("Field \"${field.name}\" argument \"$argName\" of type \"${argType.gqlName}\" is required but not provided.", field.loc)
                                                 }
-                                                if (argValue != null) {
-                                                    if (!(argType.classifier!! as KClass<*>).isInstance(argValue)) {
-                                                        throw GraphQLException("Expected type ${argType.gqlName}, found $argValue", argVar.loc)
+                                                if (ctx.vars[argName] != null) {
+                                                    val argVar = ctx.vars[argName]!!
+                                                    val argValue = argVar.on(ctx, argType)
+                                                    if (argValue == null && !argType.isMarkedNullable) {
+                                                        throw GraphQLException("Expected type ${argType.gqlName}, found null.", argVar.loc)
                                                     }
+                                                    if (argValue != null) {
+                                                        if (!(argType.classifier!! as KClass<*>).isInstance(argValue)) {
+                                                            throw GraphQLException("Expected type ${argType.gqlName}, found $argValue", argVar.loc)
+                                                        }
+                                                    }
+                                                    ctx.variables[argName] = argValue
                                                 }
-                                                ctx.variables[argName] = argValue
                                             }
+                                            val res = (prop.resolver as suspend Any?.(SchemaRequestContext) -> Any?)(obj, ctx)
+                                            val retDef = schema.typeMap[prop.ret]
+                                            val enumDef = schema.enumMap[prop.ret]
+                                            put(
+                                                field.alias ?: field.name,
+                                                mapJson(operation, res, prop.ret, retDef, enumDef, emptyList())
+                                            )
+                                        } catch (e: GraphQLException) {
+                                            errors += e.errors
                                         }
-                                        val res = (prop.resolver as suspend Any?.(SchemaRequestContext) -> Any?)(obj, ctx)
-                                        val retDef = schema.typeMap[prop.ret]
-                                        val enumDef = schema.enumMap[prop.ret]
-                                        put(
-                                            field.alias ?: field.name,
-                                            mapJson(operation, res, prop.ret, retDef, enumDef, emptyList())
-                                        )
-                                    } catch (e: GraphQLException) {
-                                        errors += e.errors
                                     }
                                 }
                             }

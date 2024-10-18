@@ -6,6 +6,34 @@ import kotlin.properties.PropertyDelegateProvider
 import kotlin.properties.ReadWriteProperty
 
 
+/**
+ * The binary data type for a struct.
+ *
+ * This type does not use the [parse] and [store] methods, instead using delegates to modify the data in-place.
+ * Any data structures defined as structs should be implemented as subclasses of [StructData].
+ *
+ * Example usage:
+ *
+ * ```
+ * class RarBlock(data: ByteArray, offset: Int) : StructData(data, offset) {
+ *     // In this example we only read them, so they're defined as `val`.
+ *     // If you need to write them, use `var` instead.
+ *     val crc by ushort
+ *     val type by ubyte
+ *     val flags by ushort
+ *     val size by ushort
+ *     val addedSize by uint
+ * }
+ *
+ * fun getRarBlockSize(data: ByteArray): Int {
+ *     val block = RarBlock(data, 0)
+ *     return block.size + block.addedSize
+ * }
+ * ```
+ *
+ * @param data The backing data for the struct.
+ * @param offset The offset into the data to start reading/writing from.
+ */
 open class StructData(internal val data: ByteArray, offset: Int = 0) : BinaryData<Unit> {
     internal var currOffset: Int = offset
     protected val byte: PropertyDelegateProvider<Any?, ReadWriteProperty<Any?, Byte>> = Prop(this, ByteData)
