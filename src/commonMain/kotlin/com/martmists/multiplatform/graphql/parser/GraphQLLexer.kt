@@ -1,122 +1,17 @@
 package com.martmists.multiplatform.graphql.parser
 
-import com.martmists.multiplatform.graphql.SchemaRequestContext
+import com.martmists.multiplatform.graphql.parser.ast.*
 import kotlin.math.pow
-
-data class ExecutableDocument(val definitions: List<ExecutableDefinition>)
-sealed interface ExecutableDefinition
-data class OperationDefinition(
-    val type: OperationType,
-    val name: String?,
-    val variableDefinitions: VariablesDefinition,
-    val directives: Directives,
-    val selectionSet: SelectionSet
-) : ExecutableDefinition
-data class FragmentDefinition(
-    val name: String,
-    val typeCond: NamedType,
-    val directives: Directives,
-    val selectionSet: SelectionSet
-) : ExecutableDefinition
-enum class OperationType {
-    QUERY, MUTATION, SUBSCRIPTION
-}
-typealias SelectionSet = List<Selection>
-sealed interface Selection
-data class Field(
-    val alias: String?,
-    val name: String,
-    val arguments: Arguments,
-    val directives: Directives,
-    val selectionSet: SelectionSet
-) : Selection
-typealias Arguments = List<Argument>
-data class Argument(
-    val name: String,
-    val value: Value
-)
-sealed interface Value {
-    fun on(context: SchemaRequestContext): Any?
-}
-data class FragmentSpread(
-    val name: String,
-    val directives: Directives
-) : Selection
-data class InlineFragment(
-    val typeCond: Type?,
-    val directives: Directives,
-    val selectionSet: SelectionSet
-) : Selection
-data class IntValue(val value: Long) : Value {
-    override fun on(context: SchemaRequestContext): Any? {
-        return value
-    }
-}
-data class FloatValue(val value: Float) : Value {
-    override fun on(context: SchemaRequestContext): Any? {
-        return value
-    }
-}
-data class BooleanValue(val value: Boolean) : Value {
-    override fun on(context: SchemaRequestContext): Any? {
-        return value
-    }
-}
-data class StringValue(val value: String) : Value {
-    override fun on(context: SchemaRequestContext): Any? {
-        return value
-    }
-}
-data object NullValue : Value {
-    override fun on(context: SchemaRequestContext): Any? {
-        return null
-    }
-}
-data class EnumValue(val value: String) : Value {
-    override fun on(context: SchemaRequestContext): Any? {
-        TODO()
-    }
-}
-data class ListValue(val value: List<Value>) : Value {
-    override fun on(context: SchemaRequestContext): Any? {
-        return value.map { it.on(context) }
-    }
-}
-data class ObjectValue(val value: Map<String, Value>) : Value {
-    override fun on(context: SchemaRequestContext): Any? {
-        return value.mapValues { it.value.on(context) }
-    }
-}
-data class Variable(val name: String) : Value {
-    override fun on(context: SchemaRequestContext): Any? {
-        TODO()
-    }
-}
-typealias VariablesDefinition = List<VariableDefinition>
-data class VariableDefinition(
-    val variable: Variable,
-    val type: Type,
-    val defaultValue: Value?,
-    val directives: Directives
-)
-sealed interface Type
-data class NonNullType(val type: Type) : Type
-data class ListType(val type: Type) : Type
-data class NamedType(val name: String) : Type
-typealias Directives = List<Directive>
-data class Directive(
-    val name: String,
-    val arguments: Arguments
-)
 
 class GraphQLLexer(contents: String) : Lexer(contents) {
     fun parseExecutableDocument(): ExecutableDocument {
         consumeIgnored()
+        val loc = loc()
         val defs = oneOrMore {
             parseExecutableDefinition()
         }
         consumeEOF()
-        return ExecutableDocument(defs)
+        return ExecutableDocument(defs, loc)
     }
 
     override fun consumeIgnored() {
@@ -149,16 +44,18 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
 
     private fun parseOperationDefinition(): OperationDefinition {
         return attemptTo {
+            val loc = loc()
             val type = parseOperationType()
             val name = attemptTo { parseName() }
             val varDef = attemptTo { parseVariablesDefinition() } ?: emptyList()
             val dirs = attemptTo { parseDirectives() } ?: emptyList()
             val select = parseSelectionSet()
 
-            OperationDefinition(type, name, varDef, dirs, select)
+            OperationDefinition(type, name, varDef, dirs, select, loc)
         } ?: let {
+            val loc = loc()
             val select = parseSelectionSet()
-            OperationDefinition(OperationType.QUERY, null, emptyList(), emptyList(), select)
+            OperationDefinition(OperationType.QUERY, null, emptyList(), emptyList(), select, loc)
         }
     }
 
@@ -168,7 +65,7 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
             ?: let { consume("subscription"); OperationType.SUBSCRIPTION }
     }
 
-    private fun parseSelectionSet(): SelectionSet {
+    private fun parseSelectionSet(): List<Selection> {
         consume('{')
         val res = oneOrMore { parseSelection() }
         consume('}')
@@ -182,15 +79,16 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
     }
 
     private fun parseField(): Field {
+        val loc = loc()
         val alias = attemptTo { parseAlias() }
         val name = parseName()
         val args = attemptTo { parseArguments() } ?: emptyList()
         val dirs = attemptTo { parseDirectives() } ?: emptyList()
         val select = attemptTo { parseSelectionSet() }
-        return Field(alias, name, args, dirs, select ?: emptyList())
+        return Field(alias, name, args, dirs, select ?: emptyList(), loc)
     }
 
-    private fun parseArguments(): Arguments {
+    private fun parseArguments(): List<Argument> {
         consume('(')
         val res = oneOrMore { parseArgument() }
         consume(')')
@@ -198,10 +96,11 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
     }
 
     private fun parseArgument(): Argument {
+        val loc = loc()
         val name = parseName()
         consume(':')
         val value = parseValue()
-        return Argument(name, value)
+        return Argument(name, value, loc)
     }
 
     fun parseAlias(): String {
@@ -211,19 +110,21 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
     }
 
     private fun parseFragmentSpread(): FragmentSpread {
+        val loc = loc()
         consume("...")
         val name = parseFragmentName()
         val dirs = attemptTo { parseDirectives() } ?: emptyList()
-        return FragmentSpread(name, dirs)
+        return FragmentSpread(name, dirs, loc)
     }
 
     private fun parseFragmentDefinition(): FragmentDefinition {
+        val loc = loc()
         consume("fragment")
         val name = parseFragmentName()
         val typeCond = parseTypeCondition()
         val dirs = attemptTo { parseDirectives() } ?: emptyList()
         val select = parseSelectionSet()
-        return FragmentDefinition(name, typeCond, dirs, select)
+        return FragmentDefinition(name, typeCond, dirs, select, loc)
     }
 
     private fun parseFragmentName(): String {
@@ -233,16 +134,18 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
     }
 
     private fun parseTypeCondition(): NamedType {
+        val loc = loc()
         consume("on")
-        return NamedType(parseName())
+        return NamedType(parseName(), loc)
     }
 
     private fun parseInlineFragment(): InlineFragment {
+        val loc = loc()
         consume("...")
         val typeCond = attemptTo { parseTypeCondition() }
         val dirs = attemptTo { parseDirectives() } ?: emptyList()
         val select = parseSelectionSet()
-        return InlineFragment(typeCond, dirs, select)
+        return InlineFragment(typeCond, dirs, select, loc)
     }
 
     private fun parseName(): String {
@@ -274,16 +177,18 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
     }
 
     private fun parseIntValue(): IntValue {
+        val loc = loc()
         val num = consumeMatching(Regex("-?(0|[1-9]\\d*)"))
         val res = num.toLong()
 
         val lookahead = attemptTo { consume('.') } ?: attemptTo { parseNameStart() }
         require(lookahead == null) { "Unexpected character after int" }
 
-        return IntValue(res)
+        return IntValue(res, loc)
     }
 
     private fun parseFloatValue(): FloatValue {
+        val loc = loc()
         val int = consumeMatching(Regex("-?(0|[1-9]\\d*)"), skip = false)
         val frac = attemptTo { consumeMatching(Regex("\\.\\d+"), skip = false) }
         val exp = attemptTo { consumeMatching(Regex("[eE]"), skip = false); consumeMatching(Regex("[\\-+]\\d+"), skip = false).toInt() }
@@ -291,15 +196,17 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
         val fracPart = frac ?: ".0"
         val floatBase = (int + fracPart).toFloat()
         val factor = 10f.pow(exp ?: 0)
-        return FloatValue(floatBase * factor)
+        return FloatValue(floatBase * factor, loc)
     }
 
     private fun parseBooleanValue(): BooleanValue {
+        val loc = loc()
         val value = consumeMatching(Regex("true|false"))
-        return BooleanValue(value.toBooleanStrict())
+        return BooleanValue(value.toBooleanStrict(), loc)
     }
 
     private fun parseStringValue(): StringValue {
+        val loc = loc()
         val str = attemptTo { parseBlockString() }
             ?: attemptTo { consume("\"\""); peek() != '"'; "" }
             ?: let {
@@ -320,7 +227,7 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
                 }
                 sb.toString()
             }
-        return StringValue(str.evaluate())
+        return StringValue(str.evaluate(), loc)
     }
 
     private fun parseBlockString(): String {
@@ -382,26 +289,30 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
     }
 
     private fun parseNullValue(): NullValue {
+        val loc = loc()
         consume("null")
-        return NullValue
+        return NullValue(loc)
     }
 
     private fun parseEnumValue(): EnumValue {
+        val loc = loc()
         val name = parseName()
         require(name !in arrayOf("true", "false", "null")) { "Invalid enum value: $name" }
-        return EnumValue(name)
+        return EnumValue(name, loc)
     }
 
     private fun parseListValue(): ListValue {
+        val loc = loc()
         consume('[')
         val items = zeroOrMore {
             parseValue()
         }
         consume(']')
-        return ListValue(items)
+        return ListValue(items, loc)
     }
 
     private fun parseObjectValue(): ObjectValue {
+        val loc = loc()
         consume('{')
         val elems = zeroOrMore {
             val name = parseName()
@@ -410,15 +321,16 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
             name to value
         }.toMap()
         consume('}')
-        return ObjectValue(elems)
+        return ObjectValue(elems, loc)
     }
 
     private fun parseVariable(): Variable {
+        val loc = loc()
         consume('$')
-        return Variable(parseName())
+        return Variable(parseName(), loc)
     }
 
-    private fun parseVariablesDefinition(): VariablesDefinition {
+    private fun parseVariablesDefinition(): List<VariableDefinition> {
         consume('(')
         val variables = zeroOrMore {
             parseVariableDefinition()
@@ -428,34 +340,37 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
     }
 
     private fun parseVariableDefinition(): VariableDefinition {
+        val loc = loc()
         val target = parseVariable()
         consume(':')
         val type = parseType()
         val default = attemptTo { parseValue() }
         val dirs = attemptTo { parseDirectives() } ?: emptyList()
-        return VariableDefinition(target, type, default, dirs)
+        return VariableDefinition(target, type, default, dirs, loc)
     }
 
     private fun parseType(): Type {
-        val type = attemptTo { NamedType(parseName()) }
-            ?: let { consume('['); val t = parseType(); consume(']'); ListType(t) }
+        val loc = loc()
+        val type = attemptTo { NamedType(parseName(), loc) }
+            ?: let { consume('['); val t = parseType(); consume(']'); ListType(t, loc) }
         if (attemptTo { consume('!') } != null) {
-            return NonNullType(type)
+            return NonNullType(type, loc)
         }
         return type
     }
 
-    private fun parseDirectives(): Directives {
+    private fun parseDirectives(): List<Directive> {
         return oneOrMore {
             parseDirective()
         }
     }
 
     private fun parseDirective(): Directive {
+        val loc = loc()
         consume('@')
         val name = parseName()
         val args = attemptTo { parseArguments() } ?: emptyList()
-        return Directive(name, args)
+        return Directive(name, args, loc)
     }
 
     private fun parseLetter(): String {

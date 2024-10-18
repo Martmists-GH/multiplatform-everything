@@ -8,6 +8,12 @@ abstract class Lexer(protected val contents: String) : Iterator<Char> {
 
     override fun next() = contents[i++]
 
+    fun loc(): Loc {
+        val line = contents.substring(0, i).count { it == '\n' }
+        val col = i - contents.substring(0, i).lastIndexOf('\n') - 1
+        return Loc(line, col)
+    }
+
     protected fun peek(): Char? = if (i <= contents.lastIndex) contents[i] else null
     protected fun peek2(): Char? = if (i < contents.lastIndex) contents[i + 1] else null
     protected fun peek3(): Char? = if (i < contents.lastIndex - 1) contents[i + 2] else null
