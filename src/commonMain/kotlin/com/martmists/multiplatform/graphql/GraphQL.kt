@@ -9,6 +9,7 @@ import com.martmists.multiplatform.graphql.parser.ast.Field
 import com.martmists.multiplatform.graphql.parser.ast.FragmentDefinition
 import com.martmists.multiplatform.graphql.parser.ast.OperationDefinition
 import com.martmists.multiplatform.graphql.parser.ast.OperationType
+import com.martmists.multiplatform.reflect.withNullability
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
@@ -127,7 +128,7 @@ class GraphQL {
                     launch {
                         wrapper {
                             try {
-                                put(field.name, execute(operation, defMap[field.name] ?: throw GraphQLException("Cannoty query field \"${field.name}\" on type \"${operation.type}\".", field.loc), field))
+                                put(field.alias ?: field.name, execute(operation, defMap[field.name] ?: throw GraphQLException("Cannoty query field \"${field.name}\" on type \"${operation.type}\".", field.loc), field))
                             } catch (e: GraphQLException) {
                                 errors += e.errors
                             }
@@ -167,11 +168,11 @@ class GraphQL {
             }
         }
         val res = def.resolver.invoke(ctx)
-        val type = def.ret
-        val typeDef = schema.typeMap[type]
-        val enumDef = schema.enumMap[type]
+        val type = schema.interfaceMap[def.ret.withNullability(false)]?.invoke(res) ?: def.ret
+        val typeDef = schema.typeMap[type.withNullability(false)]
+        val enumDef = schema.enumMap[type.withNullability(false)]
 
-        return mapJson(operation, res, type, typeDef, enumDef, operation.context.expand(typeDef?.name ?: "<ERR: INTERNAL>", field.selectionSet))
+        return mapJson(operation, res, type, typeDef, enumDef, operation.context.expand(type, field.selectionSet))
     }
 
     private suspend fun mapJson(operation: SchemaOperation, obj: Any?, type: KType, def: Schema.TypeDefinition<*>?, enum: Schema.EnumDefinition<*>?, fields: List<Field>): JsonElement {
@@ -193,21 +194,13 @@ class GraphQL {
             Boolean::class -> JsonPrimitive(obj as Boolean)
             else -> {
                 val kClass = type.classifier as KClass<*>
-                when (kClass.simpleName) {  // TODO: Switch to qualifiedName once supported in JS
-                    Array::class.simpleName -> buildJsonArray {
+                when (kClass) {
+                    List::class -> buildJsonArray {
                         val argType = type.arguments.first().type!!
-                        val argDef = schema.typeMap[argType]
-                        val enumDef = schema.enumMap[argType]
-                        for (item in obj as Array<*>) {
-                            add(mapJson(operation, item, argType, argDef, enumDef, emptyList()))
-                        }
-                    }
-                    List::class.simpleName -> buildJsonArray {
-                        val argType = type.arguments.first().type!!
-                        val argDef = schema.typeMap[argType]
-                        val enumDef = schema.enumMap[argType]
+                        val argDef = schema.typeMap[argType.withNullability(false)]
+                        val enumDef = schema.enumMap[argType.withNullability(false)]
                         for (item in obj as List<*>) {
-                            add(mapJson(operation, item, argType, argDef, enumDef, emptyList()))
+                            add(mapJson(operation, item, argType, argDef, enumDef, fields))
                         }
                     }
                     else -> buildJsonObject {
@@ -217,7 +210,7 @@ class GraphQL {
                                 launch {
                                     wrapper {
                                         try {
-                                            val prop = def!!.properties[field.name]!!
+                                            val prop = def!!.properties[field.name] ?: throw GraphQLException("Unknown field: ${field.name}", field.loc)
                                             val ctx = operation.context.withArguments(field.arguments)
                                             for ((argName, argType) in prop.arguments) {
                                                 if (ctx.vars[argName] == null && !argType.isMarkedNullable) {
@@ -238,11 +231,12 @@ class GraphQL {
                                                 }
                                             }
                                             val res = (prop.resolver as suspend Any?.(SchemaRequestContext) -> Any?)(obj, ctx)
-                                            val retDef = schema.typeMap[prop.ret]
-                                            val enumDef = schema.enumMap[prop.ret]
+                                            val retType = schema.interfaceMap[prop.ret.withNullability(false)]?.invoke(res) ?: prop.ret
+                                            val retDef = schema.typeMap[retType.withNullability(false)]
+                                            val enumDef = schema.enumMap[retType.withNullability(false)]
                                             put(
                                                 field.alias ?: field.name,
-                                                mapJson(operation, res, prop.ret, retDef, enumDef, emptyList())
+                                                mapJson(operation, res, retType, retDef, enumDef, ctx.expand(retType, field.selectionSet))
                                             )
                                         } catch (e: GraphQLException) {
                                             errors += e.errors

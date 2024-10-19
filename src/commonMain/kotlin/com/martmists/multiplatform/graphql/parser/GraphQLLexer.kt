@@ -156,12 +156,11 @@ class GraphQLLexer(contents: String) : Lexer(contents) {
     }
 
     private fun parseNameStart(): String {
-        return attemptTo { parseLetter() } ?: consume('_').toString()
+        return attemptTo { parseLetter() } ?: consume('_', skip = false).toString()
     }
 
     private fun parseNameContinue(): String {
         val res = attemptTo { parseDigit() } ?: parseNameStart()
-        consumeIgnored()
         return res
     }
 

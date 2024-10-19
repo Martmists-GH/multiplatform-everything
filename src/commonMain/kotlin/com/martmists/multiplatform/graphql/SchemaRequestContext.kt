@@ -1,6 +1,9 @@
 package com.martmists.multiplatform.graphql
 
+import com.martmists.multiplatform.graphql.ext.gqlName
 import com.martmists.multiplatform.graphql.parser.ast.*
+import com.martmists.multiplatform.reflect.withNullability
+import kotlin.reflect.KType
 
 class SchemaRequestContext(
     internal val schema: Schema,
@@ -9,6 +12,14 @@ class SchemaRequestContext(
     private val frags: List<FragmentDefinition>,
 ) {
     internal val variables = mutableMapOf<String, Any?>()
+
+    internal fun expand(type: KType, selection: List<Selection>): List<Field> {
+        var t = type
+        while (t.classifier == List::class) {
+            t = t.arguments[0].type!!
+        }
+        return expand(t.withNullability(true).gqlName, selection)
+    }
 
     internal fun expand(type: String, selection: List<Selection>): List<Field> {
         val fields = selection.filterIsInstance<Field>() + selection.filterIsInstance<FragmentSpread>().flatMap { expand(type, it) }
