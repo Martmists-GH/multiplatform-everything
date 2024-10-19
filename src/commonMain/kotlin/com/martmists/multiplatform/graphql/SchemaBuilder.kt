@@ -135,8 +135,8 @@ class SchemaBuilder {
     /**
      * Registers a type to the type system. All fields you wish to expose must be exposed manually.
      */
-    inline fun <reified T> type(noinline block: TypeBuilder<T>.() -> Unit) = type(typeOf<T>(), block)
-    fun <T> type(type: KType, block: TypeBuilder<T>.() -> Unit) {
+    inline fun <reified T : Any> type(noinline block: TypeBuilder<T>.() -> Unit) = type(typeOf<T>(), block)
+    fun <T : Any> type(type: KType, block: TypeBuilder<T>.() -> Unit) {
         val typeBuilder = TypeBuilder<T>(type.gqlName, type)
         typeBuilder.block()
         typeMap[type] = typeBuilder.build()
