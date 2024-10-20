@@ -21,7 +21,8 @@ import kotlin.reflect.KType
  *
  * This is the entry point for all GraphQL operations.
  */
-class GraphQL {
+@GraphQLDSL
+open class GraphQL {
     private var didInit = false
     private lateinit var schema: Schema
 
@@ -51,11 +52,11 @@ class GraphQL {
      * Executes a GraphQL operation.
      * This function takes a [JsonObject] to easily fit into any web application.
      */
-    suspend fun execute(payload: JsonObject): JsonElement {
+    suspend fun execute(payload: JsonObject, contexts: Map<KType, Any?> = emptyMap()): JsonElement {
         val document = payload["query"]!!.jsonPrimitive.content
         val operation = payload["operationName"]?.jsonPrimitive?.content
         val variables = payload["variables"]?.jsonObject ?: emptyMap()
-        return execute(document, operation, variables)
+        return execute(document, operation, variables, contexts)
     }
 
     /**
@@ -66,7 +67,7 @@ class GraphQL {
      * @param data The variables to pass into the operation.
      * @return The JSON output. On success, this will have a `data` key. On failure, this will have an `errors` key.
      */
-    suspend fun execute(document: String, operation: String?, data: Map<String, Any?>): JsonElement {
+    suspend fun execute(document: String, operation: String? = null, data: Map<String, Any?> = emptyMap(), contexts: Map<KType, Any?> = emptyMap()): JsonElement {
         val lexer = GraphQLLexer(document)
         val prog = lexer.parseExecutableDocument()
         val fragments = prog.definitions.filterIsInstance<FragmentDefinition>()
@@ -76,12 +77,12 @@ class GraphQL {
         try {
             val o = when (selectedOp.type) {
                 OperationType.QUERY -> execute(
-                    Query.make(schema, selectedOp, data, fragments),
+                    Query.make(schema, selectedOp, data, fragments, contexts),
                     schema.queries
                 )
 
                 OperationType.MUTATION -> execute(
-                    Mutation.make(schema, selectedOp, data, fragments),
+                    Mutation.make(schema, selectedOp, data, fragments, contexts),
                     schema.mutations
                 )
 
@@ -103,6 +104,18 @@ class GraphQL {
                     for (err in e.errors) {
                         add(buildJsonObject {
                             put("message", err.message)
+                            if (err.path.isNotEmpty()) {
+                                val path = buildJsonArray {
+                                    for (p in err.path) {
+                                        if (p is String) {
+                                            add(p)
+                                        } else if (p is Int) {
+                                            add(p)
+                                        }
+                                    }
+                                }
+                                put("path", path)
+                            }
                             if (err.loc != null) {
                                 val locs = buildJsonArray {
                                     add(buildJsonObject {
@@ -130,7 +143,7 @@ class GraphQL {
                             try {
                                 put(field.alias ?: field.name, execute(operation, defMap[field.name] ?: throw GraphQLException("Cannoty query field \"${field.name}\" on type \"${operation.type}\".", field.loc), field))
                             } catch (e: GraphQLException) {
-                                errors += e.errors
+                                errors += e.errors.map { it.withParent(field.alias ?: field.name) }
                             }
                         }
                     }
@@ -199,8 +212,16 @@ class GraphQL {
                         val argType = type.arguments.first().type!!
                         val argDef = schema.typeMap[argType.withNullability(false)]
                         val enumDef = schema.enumMap[argType.withNullability(false)]
-                        for (item in obj as List<*>) {
-                            add(mapJson(operation, item, argType, argDef, enumDef, fields))
+                        val errors = mutableListOf<GraphQLException.GraphQLError>()
+                        for ((i, item) in (obj as List<*>).withIndex()) {
+                            try {
+                                add(mapJson(operation, item, argType, argDef, enumDef, fields))
+                            } catch (e: GraphQLException) {
+                                errors += e.errors.map { it.withParent(i) }
+                            }
+                        }
+                        if (errors.isNotEmpty()) {
+                            throw GraphQLException(errors)
                         }
                     }
                     else -> buildJsonObject {
@@ -239,7 +260,7 @@ class GraphQL {
                                                 mapJson(operation, res, retType, retDef, enumDef, ctx.expand(retType, field.selectionSet))
                                             )
                                         } catch (e: GraphQLException) {
-                                            errors += e.errors
+                                            errors += e.errors.map { it.withParent(field.alias ?: field.name) }
                                         }
                                     }
                                 }

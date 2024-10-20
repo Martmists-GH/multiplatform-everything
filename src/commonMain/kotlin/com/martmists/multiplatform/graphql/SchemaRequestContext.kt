@@ -4,12 +4,14 @@ import com.martmists.multiplatform.graphql.ext.gqlName
 import com.martmists.multiplatform.graphql.parser.ast.*
 import com.martmists.multiplatform.reflect.withNullability
 import kotlin.reflect.KType
+import kotlin.reflect.typeOf
 
 class SchemaRequestContext(
     internal val schema: Schema,
     private val variableDefinitions: List<VariableDefinition>,
     internal val vars: Map<String, Value>,
     private val frags: List<FragmentDefinition>,
+    private val contexts: Map<KType, Any?>
 ) {
     internal val variables = mutableMapOf<String, Any?>()
 
@@ -42,7 +44,12 @@ class SchemaRequestContext(
         return variables[name] as T
     }
 
+    inline fun <reified T> context() = context<T>(typeOf<T>())
+    fun <T> context(type: KType): T? {
+        return contexts[type] as T?
+    }
+
     internal fun withArguments(args: List<Argument>): SchemaRequestContext {
-        return SchemaRequestContext(schema, variableDefinitions, args.associate { it.name to it.value }, frags)
+        return SchemaRequestContext(schema, variableDefinitions, args.associate { it.name to it.value }, frags, contexts)
     }
 }

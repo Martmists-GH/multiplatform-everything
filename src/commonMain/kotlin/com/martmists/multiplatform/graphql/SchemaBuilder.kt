@@ -5,6 +5,7 @@ import com.martmists.multiplatform.reflect.withNullability
 import kotlin.enums.EnumEntries
 import kotlin.reflect.*
 
+@GraphQLDSL
 class SchemaBuilder {
     private val typeMap = mutableMapOf<KType, Schema.TypeDefinition<*>>()
     private val enumMap = mutableMapOf<KType, Schema.EnumDefinition<*>>()
@@ -13,6 +14,7 @@ class SchemaBuilder {
     private val mutations = mutableMapOf<String, Schema.OperationDefinition<*>>()
     private val requestedTypes = mutableSetOf<KType>()
 
+    @GraphQLDSL
     class BackedPropertyBuilder<T, R> internal constructor(private val name: String, private val type: KType, private val prop: KProperty1<T, R>) {
         private var rule: suspend T.(SchemaRequestContext) -> Boolean = { true }
         /**
@@ -24,7 +26,7 @@ class SchemaBuilder {
          * Adds an access rule to this property. The rule will be called on the object instance, and if it returns false,
          * the property will not be included in the response.
          */
-        fun accessRule(rule: suspend T.(SchemaRequestContext) -> Boolean) {
+        fun accessRule(rule: suspend T.(ctx: SchemaRequestContext) -> Boolean) {
             this.rule = rule
         }
 
@@ -33,6 +35,7 @@ class SchemaBuilder {
         }
     }
 
+    @GraphQLDSL
     class PropertyBuilder<T, R> internal constructor(private val name: String, private val type: KType) {
         private var rule: suspend T.(SchemaRequestContext) -> Boolean = { true }
         private var resolver: (suspend T.(SchemaRequestContext) -> R)? = null
@@ -56,7 +59,7 @@ class SchemaBuilder {
          * Adds an access rule to this property. The rule will be called on the object instance, and if it returns false,
          * the property will not be included in the response.
          */
-        fun accessRule(rule: suspend T.(SchemaRequestContext) -> Boolean) {
+        fun accessRule(rule: suspend T.(ctx: SchemaRequestContext) -> Boolean) {
             this.rule = rule
         }
 
@@ -64,7 +67,7 @@ class SchemaBuilder {
          * Sets the resolver for this property. The resolver will be called on the object instance, and its result will be
          * returned in the response.
          */
-        fun resolver(getter: suspend T.(SchemaRequestContext) -> R) {
+        fun resolver(getter: suspend T.(ctx: SchemaRequestContext) -> R) {
             this.resolver = getter
         }
 
@@ -74,6 +77,7 @@ class SchemaBuilder {
         }
     }
 
+    @GraphQLDSL
     inner class TypeBuilder<T> internal constructor(private val type: KType) {
         private val properties = mutableMapOf<String, Schema.PropertyDefinition<T, *>>()
         private val interfaces = mutableListOf<KType>()
@@ -93,13 +97,13 @@ class SchemaBuilder {
          */
         inline fun <reified R> property(prop: KProperty1<T, R>, noinline builder: BackedPropertyBuilder<T, R>.() -> Unit = {}) = property(prop.name, typeOf<R>(), prop, builder)
         fun <R> property(name: String, type: KType, builder: PropertyBuilder<T, R>.() -> Unit) {
-            requestedTypes.add(type.withNullability(false))
+            (this@SchemaBuilder).requestedTypes.add(type.withNullability(false))
             val propBuilder = PropertyBuilder<T, R>(name, type)
             propBuilder.builder()
             properties[name] = propBuilder.build()
         }
         fun <R> property(name: String, type: KType, prop: KProperty1<T, R>, builder: BackedPropertyBuilder<T, R>.() -> Unit) {
-            requestedTypes.add(type.withNullability(false))
+            (this@SchemaBuilder).requestedTypes.add(type.withNullability(false))
             val propBuilder = BackedPropertyBuilder(name, type, prop)
             propBuilder.builder()
             properties[name] = propBuilder.build()
@@ -115,6 +119,7 @@ class SchemaBuilder {
         }
     }
 
+    @GraphQLDSL
     inner class InterfaceTypeBuilder<T> internal constructor(private val type: KType) {
         private val properties = mutableMapOf<String, Schema.PropertyDefinition<T, *>>()
         private var typeResolver: (suspend T.() -> KType)? = null
@@ -134,13 +139,13 @@ class SchemaBuilder {
          */
         inline fun <reified R> property(prop: KProperty1<T, R>, noinline builder: BackedPropertyBuilder<T, R>.() -> Unit = {}) = property(prop.name, typeOf<R>(), prop, builder)
         fun <R> property(name: String, type: KType, builder: PropertyBuilder<T, R>.() -> Unit) {
-            requestedTypes.add(type.withNullability(false))
+            (this@SchemaBuilder).requestedTypes.add(type.withNullability(false))
             val propBuilder = PropertyBuilder<T, R>(name, type)
             propBuilder.builder()
             properties[name] = propBuilder.build()
         }
         fun <R> property(name: String, type: KType, prop: KProperty1<T, R>, builder: BackedPropertyBuilder<T, R>.() -> Unit) {
-            requestedTypes.add(type.withNullability(false))
+            (this@SchemaBuilder).requestedTypes.add(type.withNullability(false))
             val propBuilder = BackedPropertyBuilder(name, type, prop)
             propBuilder.builder()
             properties[name] = propBuilder.build()
@@ -156,6 +161,7 @@ class SchemaBuilder {
         }
     }
 
+    @GraphQLDSL
     class OperationBuilder<T> internal constructor(private val name: String, private val type: KType) {
         private var rule: suspend (SchemaRequestContext) -> Boolean = { true }
         private var resolver: (suspend (SchemaRequestContext) -> T)? = null
@@ -183,14 +189,14 @@ class SchemaBuilder {
          * Adds an access rule to this operation. If it returns false,
          * the operation will not be executed.
          */
-        fun accessRule(rule: suspend (SchemaRequestContext) -> Boolean) {
+        fun accessRule(rule: suspend (ctx: SchemaRequestContext) -> Boolean) {
             this.rule = rule
         }
 
         /**
          * Adds a resolver to this operation.
          */
-        fun resolver(executor: suspend (SchemaRequestContext) -> T) {
+        fun resolver(executor: suspend (ctx: SchemaRequestContext) -> T) {
             this.resolver = executor
         }
 
@@ -249,14 +255,10 @@ class SchemaBuilder {
         mutations[name] = operationBuilder.build()
     }
 
-    private var introspection = true
-
     /**
-     * Toggles schema introspection
+     * Whether schema introspection is enabled
      */
-    fun disableIntrospection() {
-        introspection = false
-    }
+    var introspection = true
 
     private object __Schema
     private class __Type(val type: KType)
@@ -305,7 +307,7 @@ class SchemaBuilder {
                             typeOf<Query>(),
                             typeOf<Mutation>(),
                             typeOf<Subscription>(),
-                        ) + typeMap.keys
+                        ) + (this@SchemaBuilder).typeMap.keys
 
                         types.map(::__Type)
                     }
@@ -342,8 +344,8 @@ class SchemaBuilder {
                         when {
                             !type.isMarkedNullable -> __TypeKind.NON_NULL
                             type.classifier == List::class -> __TypeKind.LIST
-                            enumMap.containsKey(type) -> __TypeKind.ENUM
-                            typeMap.containsKey(type) || type == typeOf<Query>() || type == typeOf<Mutation>() || type == typeOf<Subscription>() -> __TypeKind.OBJECT
+                            (this@SchemaBuilder).enumMap.containsKey(type) -> __TypeKind.ENUM
+                            (this@SchemaBuilder).typeMap.containsKey(type) || type == typeOf<Query>() || type == typeOf<Mutation>() || type == typeOf<Subscription>() -> __TypeKind.OBJECT
                             else -> __TypeKind.SCALAR
                         }
                     }
@@ -357,7 +359,7 @@ class SchemaBuilder {
 
                 property<String?>("description") {
                     resolver {
-                        typeMap[type.withNullability(false)]?.description
+                        (this@SchemaBuilder).typeMap[type.withNullability(false)]?.description
                     }
                 }
 
@@ -375,16 +377,16 @@ class SchemaBuilder {
 
                         when (type) {
                             typeOf<Query>() -> {
-                                queries.map { (k, v) -> __Field(v) }
+                                (this@SchemaBuilder).queries.map { (k, v) -> __Field(v) }
                             }
                             typeOf<Mutation>() -> {
-                                mutations.map { (k, v) -> __Field(v) }
+                                (this@SchemaBuilder).mutations.map { (k, v) -> __Field(v) }
                             }
                             typeOf<Subscription>() -> {
                                 emptyList()
                             }
                             else -> {
-                                typeMap[type.withNullability(false)]?.properties?.values?.map(::__Field)
+                                (this@SchemaBuilder).typeMap[type.withNullability(false)]?.properties?.values?.map(::__Field)
                             }
                         }
                     }
@@ -403,7 +405,7 @@ class SchemaBuilder {
                                 emptyList()
                             }
                             else -> {
-                                typeMap[type.withNullability(false)]?.interfaces?.map(::__Type)
+                                (this@SchemaBuilder).typeMap[type.withNullability(false)]?.interfaces?.map(::__Type)
                             }
                         }
                     }
@@ -420,7 +422,7 @@ class SchemaBuilder {
 
                     resolver { ctx ->
                         val deprecated = ctx.includeDeprecated() ?: false
-                        enumMap[type.withNullability(false)]?.entries?.map(::__EnumValue)
+                        (this@SchemaBuilder).enumMap[type.withNullability(false)]?.entries?.map(::__EnumValue)
                     }
                 }
 
@@ -532,7 +534,7 @@ class SchemaBuilder {
             query("__type") {
                 val type = argument<String>("name")
                 resolver { ctx ->
-                    val def = typeMap.values.firstOrNull { it.name == ctx.type() }
+                    val def = (this@SchemaBuilder).typeMap.values.firstOrNull { it.name == ctx.type() }
                     def?.type?.let(::__Type)
                 }
             }
