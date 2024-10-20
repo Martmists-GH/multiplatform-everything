@@ -63,7 +63,8 @@ class EmailLexer(contents: String, private val stripComments: Boolean = false) :
             } else if (domain.matches("[0-9a-fA-F:]+".toRegex())) {
                 URILexer(domain).consumeIpv6Address()
             } else {
-                DomainLexer(domain).consumeDomain()
+                // FIXME: This doesn't support UTF-8 domains
+                // DomainLexer(domain).consumeDomain()
             }
         }
     }
@@ -125,7 +126,32 @@ class EmailLexer(contents: String, private val stripComments: Boolean = false) :
     }
 
     fun consumeAtext(): String {
-        return consumeMatching("[a-zA-Z0-9!#$%&'*+\\-/=?^_`{|}~]".toRegex())
+        return attemptTo { consumeUTF8NonAscii() } ?: consumeMatching("[a-zA-Z0-9!#$%&'*+\\-/=?^_`{|}~]".toRegex())
+    }
+
+    fun consumeUTF8NonAscii(): String {
+        return attemptTo { consumeUTF8_2() } ?: attemptTo { consumeUTF8_3() } ?: consumeUTF8_4()
+    }
+
+    fun consumeUTF8_2(): String {
+        return consumeMatching("[\\xC2-\\xDF]]".toRegex()) + consumeUTF8Tail()
+    }
+
+    fun consumeUTF8_3(): String {
+        return attemptTo { consume('\u00E0') + consumeMatching("[\\xA0-\\xBF]".toRegex()) + consumeUTF8Tail() }
+            ?: attemptTo { consumeMatching("[\\xE1-\\xEC]".toRegex()) + repeatedStr(2) { consumeUTF8Tail() } }
+            ?: attemptTo { consume('\u00ED') + consumeMatching("[\\x80-\\x9F]".toRegex()) + consumeUTF8Tail() }
+            ?: (consumeMatching("[\\xE1-\\xEF]".toRegex()) + repeatedStr(2) { consumeUTF8Tail() })
+    }
+
+    fun consumeUTF8_4(): String {
+        return attemptTo { consume('\u00F0') + consumeMatching("[\\x90-\\xBF]".toRegex()) + repeatedStr(2) { consumeUTF8Tail() } }
+            ?: attemptTo { consumeMatching("[\\xF1\\xF3]".toRegex()) + repeatedStr(3) { consumeUTF8Tail() } }
+            ?: (consume('\u00F4') + consumeMatching("[\\x80-\\x8F]".toRegex()) + repeatedStr(2) { consumeUTF8Tail() })
+    }
+
+    fun consumeUTF8Tail(): String {
+        return consumeMatching("[\\x80-\\xBF]".toRegex())
     }
 
     fun consumeAtom(): String {
@@ -243,4 +269,5 @@ class EmailLexer(contents: String, private val stripComments: Boolean = false) :
     fun zeroOrMoreStr(block: () -> String) = zeroOrMore { block() }.joinToString("")
     fun oneOrMoreStr(block: () -> String) = oneOrMore { block() }.joinToString("")
     fun optionalStr(block: () -> String) = optional { block() }?.toString() ?: ""
+    fun repeatedStr(n: Int, block: () -> String) = repeated(n, block).joinToString("")
 }
