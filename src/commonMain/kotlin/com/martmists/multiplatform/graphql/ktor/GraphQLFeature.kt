@@ -3,7 +3,6 @@ package com.martmists.multiplatform.graphql.ktor
 import com.martmists.multiplatform.graphql.GraphQL
 import com.martmists.multiplatform.graphql.GraphQLDSL
 import io.ktor.server.application.*
-import io.ktor.server.engine.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -35,7 +34,8 @@ class GraphQLFeature(val configuration: Configuration) {
 
                     post {
                         val payload = call.receive<JsonObject>()
-                        val contexts = config.contexts.mapValues { (_, v) -> v(call) }
+                        val contexts = config.contexts.mapValues { (_, v) -> v(call) }.toMutableMap()
+                        contexts[typeOf<ApplicationCall>()] = call
 
                         val result = config.execute(payload, contexts)
 
