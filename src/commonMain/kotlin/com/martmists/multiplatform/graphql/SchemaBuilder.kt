@@ -14,13 +14,28 @@ class SchemaBuilder {
     private val mutations = mutableMapOf<String, Schema.OperationDefinition<*>>()
     private val requestedTypes = mutableSetOf<KType>()
 
-    @GraphQLDSL
-    class BackedPropertyBuilder<T, R> internal constructor(private val name: String, private val type: KType, private val prop: KProperty1<T, R>) {
-        private var rule: suspend T.(SchemaRequestContext) -> Boolean = { true }
+    abstract class BaseBuilder internal constructor() {
         /**
          * A description for the property. This will be included in the schema.
          */
         var description: String? = null
+    }
+
+    abstract class BuilderWithArgument internal constructor() : BaseBuilder() {
+        protected val arguments = mutableMapOf<String, KType>()
+        /**
+         * Adds an argument to this property.
+         */
+        inline fun <reified A> argument(name: String) = argument<A>(name, typeOf<A>())
+        fun <A> argument(name: String, type: KType): SchemaRequestContext.() -> A {
+            arguments[name] = type
+            return { this.variable(name) }
+        }
+    }
+
+    @GraphQLDSL
+    class BackedPropertyBuilder<T, R> internal constructor(private val name: String, private val type: KType, private val prop: KProperty1<T, R>) : BaseBuilder() {
+        private var rule: suspend T.(SchemaRequestContext) -> Boolean = { true }
 
         /**
          * Adds an access rule to this property. The rule will be called on the object instance, and if it returns false,
@@ -36,24 +51,9 @@ class SchemaBuilder {
     }
 
     @GraphQLDSL
-    class PropertyBuilder<T, R> internal constructor(private val name: String, private val type: KType) {
+    class PropertyBuilder<T, R> internal constructor(private val name: String, private val type: KType) : BuilderWithArgument() {
         private var rule: suspend T.(SchemaRequestContext) -> Boolean = { true }
         private var resolver: (suspend T.(SchemaRequestContext) -> R)? = null
-        private val arguments = mutableMapOf<String, KType>()
-
-        /**
-         * A description for the property. This will be included in the schema.
-         */
-        var description: String? = null
-
-        /**
-         * Adds an argument to this property.
-         */
-        inline fun <reified A> argument(name: String) = argument<A>(name, typeOf<A>())
-        fun <A> argument(name: String, type: KType): SchemaRequestContext.() -> A {
-            arguments[name] = type
-            return { this.variable(name) }
-        }
 
         /**
          * Adds an access rule to this property. The rule will be called on the object instance, and if it returns false,
@@ -77,15 +77,8 @@ class SchemaBuilder {
         }
     }
 
-    @GraphQLDSL
-    inner class TypeBuilder<T> internal constructor(private val type: KType) {
-        private val properties = mutableMapOf<String, Schema.PropertyDefinition<T, *>>()
-        private val interfaces = mutableListOf<KType>()
-
-        /**
-         * A description for the type. This will be included in the schema.
-         */
-        var description: String? = null
+    abstract inner class BaseTypeBuilder<T> internal constructor() : BaseBuilder() {
+        protected val properties = mutableMapOf<String, Schema.PropertyDefinition<T, *>>()
 
         /**
          * Registers a property on this type. You must set the `resolver` function for this property.
@@ -108,6 +101,12 @@ class SchemaBuilder {
             propBuilder.builder()
             properties[name] = propBuilder.build()
         }
+    }
+
+    @GraphQLDSL
+    inner class TypeBuilder<T> internal constructor(private val type: KType): BaseTypeBuilder<T>() {
+        private val interfaces = mutableListOf<KType>()
+
 
         inline fun <reified T> usesInterface() = usesInterface(typeOf<T>())
         fun usesInterface(type: KType) {
@@ -120,36 +119,8 @@ class SchemaBuilder {
     }
 
     @GraphQLDSL
-    inner class InterfaceTypeBuilder<T> internal constructor(private val type: KType) {
-        private val properties = mutableMapOf<String, Schema.PropertyDefinition<T, *>>()
+    inner class InterfaceTypeBuilder<T> internal constructor(private val type: KType): BaseTypeBuilder<T>() {
         private var typeResolver: (suspend T.() -> KType)? = null
-
-        /**
-         * A description for the type. This will be included in the schema.
-         */
-        var description: String? = null
-
-        /**
-         * Registers a property on this type. You must set the `resolver` function for this property.
-         */
-        inline fun <reified R> property(name: String, noinline builder: PropertyBuilder<T, R>.() -> Unit) = property(name, typeOf<R>(), builder)
-
-        /**
-         * Registers a bound property on this type.
-         */
-        inline fun <reified R> property(prop: KProperty1<T, R>, noinline builder: BackedPropertyBuilder<T, R>.() -> Unit = {}) = property(prop.name, typeOf<R>(), prop, builder)
-        fun <R> property(name: String, type: KType, builder: PropertyBuilder<T, R>.() -> Unit) {
-            (this@SchemaBuilder).requestedTypes.add(type.withNullability(false))
-            val propBuilder = PropertyBuilder<T, R>(name, type)
-            propBuilder.builder()
-            properties[name] = propBuilder.build()
-        }
-        fun <R> property(name: String, type: KType, prop: KProperty1<T, R>, builder: BackedPropertyBuilder<T, R>.() -> Unit) {
-            (this@SchemaBuilder).requestedTypes.add(type.withNullability(false))
-            val propBuilder = BackedPropertyBuilder(name, type, prop)
-            propBuilder.builder()
-            properties[name] = propBuilder.build()
-        }
 
         fun resolver(typeResolver: suspend T.() -> KType) {
             this.typeResolver = typeResolver
@@ -162,28 +133,9 @@ class SchemaBuilder {
     }
 
     @GraphQLDSL
-    class OperationBuilder<T> internal constructor(private val name: String, private val type: KType) {
+    class OperationBuilder<T> internal constructor(private val name: String, private val type: KType): BuilderWithArgument() {
         private var rule: suspend (SchemaRequestContext) -> Boolean = { true }
         private var resolver: (suspend (SchemaRequestContext) -> T)? = null
-        private val arguments = mutableMapOf<String, KType>()
-
-        /**
-         * A description for the operation. This will be included in the schema.
-         */
-        var description: String? = null
-
-        // TODO: Delegate version of `argument`?
-
-        /**
-         * Adds an argument to this operation.
-         */
-        inline fun <reified A> argument(name: String) = argument<A>(name, typeOf<A>())
-        fun <A> argument(name: String, type: KType): SchemaRequestContext.() -> A {
-            arguments[name] = type
-            return {
-                this.variable<A>(name)
-            }
-        }
 
         /**
          * Adds an access rule to this operation. If it returns false,
