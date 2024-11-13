@@ -247,7 +247,7 @@ class SchemaBuilder {
 
                 property("types") {
                     resolver {
-                        val types = listOf(
+                        val types = listOfNotNull(
                             // Primitives
                             typeOf<Int?>(),
                             typeOf<Long?>(),
@@ -257,9 +257,9 @@ class SchemaBuilder {
                             typeOf<Double?>(),
 
                             // Operations
-                            typeOf<Query?>(),
-                            typeOf<Mutation?>(),
-                            typeOf<Subscription?>(),
+                            typeOf<Query?>().takeIf { queries.size > 2 },
+                            typeOf<Mutation?>().takeIf { mutations.isNotEmpty() },
+                            typeOf<Subscription?>().takeIf { false },  // TODO
                         ) +
                                 typeMap.keys.map { it.withNullability(true) } +
                                 enumMap.keys.map { it.withNullability(true) }
@@ -270,19 +270,19 @@ class SchemaBuilder {
 
                 property("queryType") {
                     resolver {
-                        __Type(typeOf<Query?>())
+                        __Type(typeOf<Query?>()).takeIf { queries.size > 2 }  // Ignore __schema and __type
                     }
                 }
 
                 property("mutationType") {
                     resolver {
-                        __Type(typeOf<Mutation?>())
+                        __Type(typeOf<Mutation?>()).takeIf { mutations.isNotEmpty() }
                     }
                 }
 
                 property("subscriptionType") {
                     resolver {
-                        __Type(typeOf<Subscription?>())
+                        __Type(typeOf<Subscription?>()).takeIf { false }  // TODO
                     }
                 }
 
@@ -339,7 +339,7 @@ class SchemaBuilder {
 
                         when (type) {
                             typeOf<Query?>() -> {
-                                queries.map { (k, v) -> __Field(v) }
+                                queries.filterValues { !it.name.startsWith("__") }.map { (k, v) -> __Field(v) }
                             }
                             typeOf<Mutation?>() -> {
                                 mutations.map { (k, v) -> __Field(v) }

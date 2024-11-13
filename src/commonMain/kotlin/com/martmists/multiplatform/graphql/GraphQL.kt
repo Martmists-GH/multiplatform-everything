@@ -90,13 +90,7 @@ open class GraphQL {
             }
 
             return buildJsonObject {
-                if (operation == null) {
-                    put("data", o)
-                } else {
-                    put("data", buildJsonObject {
-                        put(operation, o)
-                    })
-                }
+                put("data", o)
             }
         } catch (e: GraphQLException) {
             return buildJsonObject {
@@ -141,7 +135,7 @@ open class GraphQL {
                     launch {
                         wrapper {
                             try {
-                                put(field.alias ?: field.name, execute(operation, defMap[field.name] ?: throw GraphQLException("Cannoty query field \"${field.name}\" on type \"${operation.type}\".", field.loc), field))
+                                put(field.alias ?: field.name, execute(operation, defMap[field.name] ?: throw GraphQLException("Cannot query field \"${field.name}\" on type \"${operation.type}\".", field.loc), field))
                             } catch (e: GraphQLException) {
                                 errors += e.errors.map { it.withParent(field.alias ?: field.name) }
                             }
