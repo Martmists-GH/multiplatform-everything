@@ -5,6 +5,7 @@ import kotlin.reflect.*
 inline fun <reified T : Any> SchemaBuilder.fullType(noinline block: SchemaBuilder.TypeBuilder<T>.() -> Unit = {}) = fullType(typeOf<T>(), T::class, block)
 fun <T : Any> SchemaBuilder.fullType(type: KType, klass: KClass<T>, block: SchemaBuilder.TypeBuilder<T>.() -> Unit = {}) {
     type<Any>(type) {
+        @Suppress("UNCHECKED_CAST")
         this as SchemaBuilder.TypeBuilder<T>
 
         for (member in klass.members.filterIsInstance<KProperty<*>>()) {
@@ -33,6 +34,7 @@ fun <T : Any> SchemaBuilder.fullType(type: KType, klass: KClass<T>, block: Schem
 inline fun <reified T : Any> SchemaBuilder.fullInterfaceType(noinline block: SchemaBuilder.InterfaceTypeBuilder<T>.() -> Unit) = fullInterfaceType(typeOf<T>(), T::class, block)
 fun <T : Any> SchemaBuilder.fullInterfaceType(type: KType, klass: KClass<T>, block: SchemaBuilder.InterfaceTypeBuilder<T>.() -> Unit) {
     interfaceType<Any>(type) {
+        @Suppress("UNCHECKED_CAST")
         this as SchemaBuilder.InterfaceTypeBuilder<T>
 
         for (member in klass.members.filterIsInstance<KProperty<*>>()) {

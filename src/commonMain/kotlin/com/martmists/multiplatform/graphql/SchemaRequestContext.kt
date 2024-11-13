@@ -41,11 +41,13 @@ class SchemaRequestContext(
     }
 
     internal fun <T> variable(name: String): T {
+        @Suppress("UNCHECKED_CAST")
         return variables[name] as T
     }
 
     inline fun <reified T> context() = context<T>(typeOf<T>())
     fun <T> context(type: KType): T? {
+        @Suppress("UNCHECKED_CAST")
         return contexts[type] as T?
     }
 

@@ -8,6 +8,7 @@ import graphql.schema.Droid
 import graphql.schema.Episode
 import graphql.schema.Human
 import kotlinx.coroutines.runBlocking
+import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
 import kotlin.test.Test
 
@@ -121,8 +122,8 @@ class GraphQLTest {
     @Test
     fun testFragments() {
         runBlocking {
-            val res = gql.execute(
-                """
+            @Language("graphql")
+            val query = """
 query DroidFieldInFragment {
   emp: hero(episode: EMPIRE) {
     name
@@ -137,7 +138,8 @@ query DroidFieldInFragment {
 fragment DroidFields on Droid {
   primaryFunction
 }
-            """.trimIndent(), "DroidFieldInFragment", emptyMap())
+            """.trimIndent()
+            val res = gql.execute(query, "DroidFieldInFragment", emptyMap())
 
             println(res)
         }
@@ -146,32 +148,101 @@ fragment DroidFields on Droid {
     @Test
     fun testIntrospection() {
         runBlocking {
-            val res = gql.execute(
-                """
-{
+            val operationName = "IntrospectionQuery"
+            @Language("graphql")
+            val query = """
+query IntrospectionQuery {
   __schema {
-    queryType {
-      fields {
+    queryType { name }
+    mutationType { name }
+    subscriptionType { name }
+    types {
+      ...FullType
+    }
+    directives {
+      name
+      description
+      locations
+      args {
+        ...InputValue
+      }
+    }
+  }
+}
+fragment FullType on __Type {
+  kind
+  name
+  description
+  fields(includeDeprecated: true) {
+    name
+    description
+    args {
+      ...InputValue
+    }
+    type {
+      ...TypeRef 
+    }
+    isDeprecated
+    deprecationReason
+  }
+  inputFields {
+    ...InputValue
+  }
+  interfaces {
+    ...TypeRef
+  }
+  enumValues(includeDeprecated: true) {
+    name
+    description
+    isDeprecated
+    deprecationReason
+  }
+  possibleTypes {
+    ...TypeRef
+  }
+}
+fragment InputValue on __InputValue {
+  name
+  description
+  type {
+    ...TypeRef
+  }
+  defaultValue
+}
+fragment TypeRef on __Type {
+  kind
+  name
+  ofType {
+    kind
+    name
+    ofType {
+      kind
+      name
+      ofType {
+        kind
         name
-        args {
+        ofType {
+          kind
           name
-          description
-          type {
-            name
+          ofType {
             kind
+            name
             ofType {
-              name
               kind
+              name
+              ofType {
+                kind
+                name
+              }
             }
           }
-          defaultValue
         }
       }
     }
   }
 }
-            """.trimIndent(), null, emptyMap())
-
+            """.trimIndent()
+            val res = gql.execute(query, operationName, emptyMap())
             println(res)
         }
     }

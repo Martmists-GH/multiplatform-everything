@@ -1,10 +1,8 @@
-@file:Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
-
 package com.martmists.multiplatform.reflect
 
 import kotlin.reflect.KType
-import kotlin.reflect.jvm.internal.KTypeImpl
+import kotlin.reflect.full.withNullability
 
 actual fun KType.withNullability(nullable: Boolean): KType {
-    return (this as KTypeImpl).makeNullableAsSpecified(nullable)
+    return this.withNullability(nullable)
 }

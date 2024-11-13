@@ -2,6 +2,7 @@ package com.martmists.multiplatform.graphql.ktor
 
 import com.martmists.multiplatform.graphql.GraphQL
 import com.martmists.multiplatform.graphql.GraphQLDSL
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -39,7 +40,7 @@ class GraphQLFeature(val configuration: Configuration) {
 
                         val result = config.execute(payload, contexts)
 
-                        call.respond(result)
+                        call.respondText(result.toString(), ContentType.Application.Json)
                     }
                 }
             }

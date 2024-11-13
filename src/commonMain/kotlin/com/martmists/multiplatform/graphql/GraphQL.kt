@@ -237,6 +237,7 @@ open class GraphQL {
                                             val prop = def!!.properties[field.name] ?: throw GraphQLException("Unknown field: ${field.name}", field.loc)
                                             val ctx = operation.context.withArguments(field.arguments)
                                             parseVariables(ctx, field, prop.arguments)
+                                            @Suppress("UNCHECKED_CAST")
                                             val res = (prop.resolver as suspend Any?.(SchemaRequestContext) -> Any?)(obj, ctx)
                                             val retType = schema.interfaceMap[prop.ret.withNullability(false)]?.invoke(res) ?: prop.ret
                                             put(

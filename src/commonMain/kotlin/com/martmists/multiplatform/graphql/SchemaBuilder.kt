@@ -87,13 +87,13 @@ class SchemaBuilder {
          */
         inline fun <reified R> property(prop: KProperty1<T, R>, noinline builder: @GraphQLDSL BackedPropertyBuilder<T, R>.() -> Unit = {}) = property(prop.name, typeOf<R>(), prop, builder)
         fun <R> property(name: String, type: KType, builder: PropertyBuilder<T, R>.() -> Unit) {
-            (this@SchemaBuilder).requestedTypes.add(type.withNullability(false))
+            requestedTypes.add(type.withNullability(false))
             val propBuilder = PropertyBuilder<T, R>(name, type)
             propBuilder.builder()
             properties[name] = propBuilder.build()
         }
         fun <R> property(name: String, type: KType, prop: KProperty1<T, R>, builder: @GraphQLDSL BackedPropertyBuilder<T, R>.() -> Unit) {
-            (this@SchemaBuilder).requestedTypes.add(type.withNullability(false))
+            requestedTypes.add(type.withNullability(false))
             val propBuilder = BackedPropertyBuilder(name, type, prop)
             propBuilder.builder()
             properties[name] = propBuilder.build()
@@ -164,6 +164,7 @@ class SchemaBuilder {
         builder.block()
         val (def, resolver) = builder.build()
         typeMap[type] = def
+        @Suppress("UNCHECKED_CAST")
         interfaceMap[type] = resolver as suspend Any?.() -> KType
     }
 
@@ -248,18 +249,20 @@ class SchemaBuilder {
                     resolver {
                         val types = listOf(
                             // Primitives
-                            typeOf<Int>(),
-                            typeOf<Long>(),
-                            typeOf<String>(),
-                            typeOf<Boolean>(),
-                            typeOf<Float>(),
-                            typeOf<Double>(),
+                            typeOf<Int?>(),
+                            typeOf<Long?>(),
+                            typeOf<String?>(),
+                            typeOf<Boolean?>(),
+                            typeOf<Float?>(),
+                            typeOf<Double?>(),
 
                             // Operations
-                            typeOf<Query>(),
-                            typeOf<Mutation>(),
-                            typeOf<Subscription>(),
-                        ) + (this@SchemaBuilder).typeMap.keys
+                            typeOf<Query?>(),
+                            typeOf<Mutation?>(),
+                            typeOf<Subscription?>(),
+                        ) +
+                                typeMap.keys.map { it.withNullability(true) } +
+                                enumMap.keys.map { it.withNullability(true) }
 
                         types.map(::__Type)
                     }
@@ -267,19 +270,19 @@ class SchemaBuilder {
 
                 property("queryType") {
                     resolver {
-                        __Type(typeOf<Query>())
+                        __Type(typeOf<Query?>())
                     }
                 }
 
                 property("mutationType") {
                     resolver {
-                        __Type(typeOf<Mutation>())
+                        __Type(typeOf<Mutation?>())
                     }
                 }
 
                 property("subscriptionType") {
                     resolver {
-                        __Type(typeOf<Subscription>())
+                        __Type(typeOf<Subscription?>())
                     }
                 }
 
@@ -293,11 +296,13 @@ class SchemaBuilder {
             type<__Type> {
                 property("kind") {
                     resolver {
+                        val nonNull = type.withNullability(false)
                         when {
                             !type.isMarkedNullable -> __TypeKind.NON_NULL
                             type.classifier == List::class -> __TypeKind.LIST
-                            (this@SchemaBuilder).enumMap.containsKey(type) -> __TypeKind.ENUM
-                            (this@SchemaBuilder).typeMap.containsKey(type) || type == typeOf<Query>() || type == typeOf<Mutation>() || type == typeOf<Subscription>() -> __TypeKind.OBJECT
+                            enumMap.containsKey(nonNull) -> __TypeKind.ENUM
+                            interfaceMap.containsKey(nonNull) -> __TypeKind.INTERFACE
+                            typeMap.containsKey(nonNull) || type == typeOf<Query?>() || type == typeOf<Mutation?>() || type == typeOf<Subscription?>() -> __TypeKind.OBJECT
                             else -> __TypeKind.SCALAR
                         }
                     }
@@ -305,13 +310,18 @@ class SchemaBuilder {
 
                 property("name") {
                     resolver {
-                        type.withNullability(true).gqlName.takeIf { type.classifier != List::class && type.isMarkedNullable }
+                        when (this.type) {
+                            typeOf<Query?>() -> "Query"
+                            typeOf<Mutation?>() -> "Mutation"
+                            typeOf<Subscription?>() -> "Subscription"
+                            else -> type.withNullability(true).gqlName.takeIf { type.classifier != List::class && type.isMarkedNullable }
+                        }
                     }
                 }
 
                 property<String?>("description") {
                     resolver {
-                        (this@SchemaBuilder).typeMap[type.withNullability(false)]?.description
+                        typeMap[type.withNullability(false)]?.description
                     }
                 }
 
@@ -328,17 +338,17 @@ class SchemaBuilder {
                         val deprecated = ctx.includeDeprecated() ?: false
 
                         when (type) {
-                            typeOf<Query>() -> {
-                                (this@SchemaBuilder).queries.map { (k, v) -> __Field(v) }
+                            typeOf<Query?>() -> {
+                                queries.map { (k, v) -> __Field(v) }
                             }
-                            typeOf<Mutation>() -> {
-                                (this@SchemaBuilder).mutations.map { (k, v) -> __Field(v) }
+                            typeOf<Mutation?>() -> {
+                                mutations.map { (k, v) -> __Field(v) }
                             }
-                            typeOf<Subscription>() -> {
+                            typeOf<Subscription?>() -> {
                                 emptyList()
                             }
                             else -> {
-                                (this@SchemaBuilder).typeMap[type.withNullability(false)]?.properties?.values?.map(::__Field)
+                                typeMap[type.withNullability(false)]?.properties?.values?.map(::__Field)
                             }
                         }
                     }
@@ -347,17 +357,11 @@ class SchemaBuilder {
                 property<List<__Type>?>("interfaces") {
                     resolver {
                         when (type) {
-                            typeOf<Query>() -> {
-                                emptyList()
-                            }
-                            typeOf<Mutation>() -> {
-                                emptyList()
-                            }
-                            typeOf<Subscription>() -> {
+                            typeOf<Query?>(), typeOf<Mutation?>(), typeOf<Subscription?>() -> {
                                 emptyList()
                             }
                             else -> {
-                                (this@SchemaBuilder).typeMap[type.withNullability(false)]?.interfaces?.map(::__Type)
+                                typeMap[type.withNullability(false)]?.interfaces?.map(::__Type)
                             }
                         }
                     }
@@ -365,7 +369,12 @@ class SchemaBuilder {
 
                 property<List<__Type>?>("possibleTypes") {
                     resolver {
-                        null
+                        val notNull = type.withNullability(false)
+                        if (notNull in interfaceMap.keys) {
+                            typeMap.filterValues { notNull in it.interfaces }.map { (k, _) -> __Type(k.withNullability(true)) }
+                        } else {
+                            null
+                        }
                     }
                 }
 
@@ -486,7 +495,7 @@ class SchemaBuilder {
             query("__type") {
                 val type = argument<String>("name")
                 resolver { ctx ->
-                    val def = (this@SchemaBuilder).typeMap.values.firstOrNull { it.name == ctx.type() }
+                    val def = typeMap.values.firstOrNull { it.name == ctx.type() }
                     def?.type?.let(::__Type)
                 }
             }
