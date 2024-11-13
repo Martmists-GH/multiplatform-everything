@@ -1,9 +1,10 @@
 plugins {
     kotlin("multiplatform") version "2.0.20"
     kotlin("plugin.serialization") version "2.0.20"
+    `maven-publish`
 }
 
-group = "com.martmists.multiplatform"
+group = "com.martmists.multiplatform-everything"
 version = "1.0.0"
 
 repositories {
@@ -33,6 +34,21 @@ kotlin {
         commonTest {
             dependencies {
                 implementation(kotlin("test"))
+            }
+        }
+    }
+}
+
+if (findProperty("mavenToken") != null) {
+    publishing {
+        repositories {
+            maven {
+                name = "Releases"
+                url = uri("https://maven.martmists.com/releases")
+                credentials {
+                    username = "admin"
+                    password = project.ext["mavenToken"]!! as String
+                }
             }
         }
     }

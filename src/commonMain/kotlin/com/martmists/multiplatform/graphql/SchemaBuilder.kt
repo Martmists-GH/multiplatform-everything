@@ -5,7 +5,6 @@ import com.martmists.multiplatform.reflect.withNullability
 import kotlin.enums.EnumEntries
 import kotlin.reflect.*
 
-@GraphQLDSL
 class SchemaBuilder {
     private val typeMap = mutableMapOf<KType, Schema.TypeDefinition<*>>()
     private val enumMap = mutableMapOf<KType, Schema.EnumDefinition<*>>()
@@ -33,7 +32,6 @@ class SchemaBuilder {
         }
     }
 
-    @GraphQLDSL
     class BackedPropertyBuilder<T, R> internal constructor(private val name: String, private val type: KType, private val prop: KProperty1<T, R>) : BaseBuilder() {
         private var rule: suspend T.(SchemaRequestContext) -> Boolean = { true }
 
@@ -41,7 +39,7 @@ class SchemaBuilder {
          * Adds an access rule to this property. The rule will be called on the object instance, and if it returns false,
          * the property will not be included in the response.
          */
-        fun accessRule(rule: suspend T.(ctx: SchemaRequestContext) -> Boolean) {
+        fun accessRule(rule: @GraphQLDSL suspend T.(ctx: SchemaRequestContext) -> Boolean) {
             this.rule = rule
         }
 
@@ -50,7 +48,6 @@ class SchemaBuilder {
         }
     }
 
-    @GraphQLDSL
     class PropertyBuilder<T, R> internal constructor(private val name: String, private val type: KType) : BuilderWithArgument() {
         private var rule: suspend T.(SchemaRequestContext) -> Boolean = { true }
         private var resolver: (suspend T.(SchemaRequestContext) -> R)? = null
@@ -59,7 +56,7 @@ class SchemaBuilder {
          * Adds an access rule to this property. The rule will be called on the object instance, and if it returns false,
          * the property will not be included in the response.
          */
-        fun accessRule(rule: suspend T.(ctx: SchemaRequestContext) -> Boolean) {
+        fun accessRule(rule: @GraphQLDSL suspend T.(ctx: SchemaRequestContext) -> Boolean) {
             this.rule = rule
         }
 
@@ -67,7 +64,7 @@ class SchemaBuilder {
          * Sets the resolver for this property. The resolver will be called on the object instance, and its result will be
          * returned in the response.
          */
-        fun resolver(getter: suspend T.(ctx: SchemaRequestContext) -> R) {
+        fun resolver(getter: @GraphQLDSL suspend T.(ctx: SchemaRequestContext) -> R) {
             this.resolver = getter
         }
 
@@ -83,19 +80,19 @@ class SchemaBuilder {
         /**
          * Registers a property on this type. You must set the `resolver` function for this property.
          */
-        inline fun <reified R> property(name: String, noinline builder: PropertyBuilder<T, R>.() -> Unit) = property(name, typeOf<R>(), builder)
+        inline fun <reified R> property(name: String, noinline builder: @GraphQLDSL PropertyBuilder<T, R>.() -> Unit) = property(name, typeOf<R>(), builder)
 
         /**
          * Registers a bound property on this type.
          */
-        inline fun <reified R> property(prop: KProperty1<T, R>, noinline builder: BackedPropertyBuilder<T, R>.() -> Unit = {}) = property(prop.name, typeOf<R>(), prop, builder)
+        inline fun <reified R> property(prop: KProperty1<T, R>, noinline builder: @GraphQLDSL BackedPropertyBuilder<T, R>.() -> Unit = {}) = property(prop.name, typeOf<R>(), prop, builder)
         fun <R> property(name: String, type: KType, builder: PropertyBuilder<T, R>.() -> Unit) {
             (this@SchemaBuilder).requestedTypes.add(type.withNullability(false))
             val propBuilder = PropertyBuilder<T, R>(name, type)
             propBuilder.builder()
             properties[name] = propBuilder.build()
         }
-        fun <R> property(name: String, type: KType, prop: KProperty1<T, R>, builder: BackedPropertyBuilder<T, R>.() -> Unit) {
+        fun <R> property(name: String, type: KType, prop: KProperty1<T, R>, builder: @GraphQLDSL BackedPropertyBuilder<T, R>.() -> Unit) {
             (this@SchemaBuilder).requestedTypes.add(type.withNullability(false))
             val propBuilder = BackedPropertyBuilder(name, type, prop)
             propBuilder.builder()
@@ -103,11 +100,12 @@ class SchemaBuilder {
         }
     }
 
-    @GraphQLDSL
     inner class TypeBuilder<T> internal constructor(private val type: KType): BaseTypeBuilder<T>() {
         private val interfaces = mutableListOf<KType>()
 
-
+        /**
+         * Registers this type as inheriting the given interface type.
+         */
         inline fun <reified T> usesInterface() = usesInterface(typeOf<T>())
         fun usesInterface(type: KType) {
             interfaces += type
@@ -118,16 +116,18 @@ class SchemaBuilder {
         }
     }
 
-    @GraphQLDSL
     inner class InterfaceTypeBuilder<T> internal constructor(private val type: KType): BaseTypeBuilder<T>() {
         private var typeResolver: (suspend T.() -> KType)? = null
 
-        fun resolver(typeResolver: suspend T.() -> KType) {
+        /**
+         * Resolves the value to its GraphQL type.
+         */
+        fun resolver(typeResolver: @GraphQLDSL suspend T.() -> KType) {
             this.typeResolver = typeResolver
         }
 
         internal fun build(): Pair<Schema.TypeDefinition<T>, (suspend T.() -> KType)> {
-            require(typeResolver != null) { "Interface ${type.gqlName} has no getter" }
+            require(typeResolver != null) { "Interface ${type.gqlName} has no resolver" }
             return Schema.TypeDefinition(type.withNullability(true).gqlName, description, type, properties, emptyList()) to typeResolver!!
         }
     }
@@ -141,25 +141,25 @@ class SchemaBuilder {
          * Adds an access rule to this operation. If it returns false,
          * the operation will not be executed.
          */
-        fun accessRule(rule: suspend (ctx: SchemaRequestContext) -> Boolean) {
+        fun accessRule(rule: @GraphQLDSL suspend (ctx: SchemaRequestContext) -> Boolean) {
             this.rule = rule
         }
 
         /**
          * Adds a resolver to this operation.
          */
-        fun resolver(executor: suspend (ctx: SchemaRequestContext) -> T) {
-            this.resolver = executor
+        fun resolver(resolver: @GraphQLDSL suspend (ctx: SchemaRequestContext) -> T) {
+            this.resolver = resolver
         }
 
         internal fun build(): Schema.OperationDefinition<T> {
-            require(resolver != null) { "Operation $name has no executor" }
+            require(resolver != null) { "Operation $name has no resolver" }
             return Schema.OperationDefinition(name, description, type, rule, arguments, resolver!!)
         }
     }
 
-    inline fun <reified T : Any> interfaceType(noinline block: InterfaceTypeBuilder<*>.() -> Unit) = interfaceType<T>(typeOf<T>(), block)
-    fun <T : Any> interfaceType(type: KType, block: InterfaceTypeBuilder<T>.() -> Unit) {
+    inline fun <reified T : Any> interfaceType(noinline block: @GraphQLDSL InterfaceTypeBuilder<*>.() -> Unit) = interfaceType<T>(typeOf<T>(), block)
+    fun <T : Any> interfaceType(type: KType, block: @GraphQLDSL InterfaceTypeBuilder<T>.() -> Unit) {
         val builder = InterfaceTypeBuilder<T>(type)
         builder.block()
         val (def, resolver) = builder.build()
@@ -170,8 +170,8 @@ class SchemaBuilder {
     /**
      * Registers a type to the type system. All fields you wish to expose must be exposed manually.
      */
-    inline fun <reified T : Any> type(noinline block: TypeBuilder<T>.() -> Unit) = type(typeOf<T>(), block)
-    fun <T : Any> type(type: KType, block: TypeBuilder<T>.() -> Unit) {
+    inline fun <reified T : Any> type(noinline block: @GraphQLDSL TypeBuilder<T>.() -> Unit) = type(typeOf<T>(), block)
+    fun <T : Any> type(type: KType, block: @GraphQLDSL TypeBuilder<T>.() -> Unit) {
         val typeBuilder = TypeBuilder<T>(type)
         typeBuilder.block()
         typeMap[type] = typeBuilder.build()
@@ -188,8 +188,8 @@ class SchemaBuilder {
     /**
      * Defines a query operation to the schema.
      */
-    inline fun <reified T> query(name: String, noinline block: OperationBuilder<T>.() -> Unit) = query(name, typeOf<T>(), block)
-    fun <T> query(name: String, type: KType, block: OperationBuilder<T>.() -> Unit) {
+    inline fun <reified T> query(name: String, noinline block: @GraphQLDSL OperationBuilder<T>.() -> Unit) = query(name, typeOf<T>(), block)
+    fun <T> query(name: String, type: KType, block: @GraphQLDSL OperationBuilder<T>.() -> Unit) {
         requestedTypes.add(type)
         val operationBuilder = OperationBuilder<T>(name, type)
         operationBuilder.block()
@@ -199,8 +199,8 @@ class SchemaBuilder {
     /**
      * Defines a mutation operation to the schema.
      */
-    inline fun <reified T> mutation(name: String, noinline block: OperationBuilder<T>.() -> Unit) = mutation(name, typeOf<T>(), block)
-    fun <T> mutation(name: String, type: KType, block: OperationBuilder<T>.() -> Unit) {
+    inline fun <reified T> mutation(name: String, noinline block: @GraphQLDSL OperationBuilder<T>.() -> Unit) = mutation(name, typeOf<T>(), block)
+    fun <T> mutation(name: String, type: KType, block: @GraphQLDSL OperationBuilder<T>.() -> Unit) {
         requestedTypes.add(type)
         val operationBuilder = OperationBuilder<T>(name, type)
         operationBuilder.block()

@@ -16,4 +16,12 @@ Everything is licensed BSD 3-Clause (NON-AI), PRs are welcome.
 
 ## Maven artifacts
 
-Soon:tm:
+```kotlin
+repositories {
+    maven("https://maven.martmists.com/releases")
+}
+
+dependencies {
+    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.0.0")
+}
+```
