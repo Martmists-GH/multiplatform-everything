@@ -1,2 +1,9 @@
-rootProject.name = "multiplatfom-everything"
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+        google()
+    }
+}
 
+rootProject.name = "multiplatfom-everything"

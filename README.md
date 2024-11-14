@@ -13,6 +13,8 @@ Everything is licensed BSD 3-Clause (NON-AI), PRs are welcome.
   - Email
   - URI
   - Domain
+- Logger
+  - Uses SLF4J on JVM/Android
 
 ## Maven artifacts
 
@@ -22,6 +24,6 @@ repositories {
 }
 
 dependencies {
-    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.0.2")
+    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.0.3")
 }
 ```
