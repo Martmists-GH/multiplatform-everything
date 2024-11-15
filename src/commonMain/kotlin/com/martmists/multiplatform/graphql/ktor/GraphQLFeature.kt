@@ -16,6 +16,7 @@ class GraphQLFeature(val configuration: Configuration) {
     class Configuration : GraphQL() {
         internal val contexts = mutableMapOf<KType, (RoutingCall) -> Any?>()
         var endpoint: String = "/graphql"
+        var playgroundHtml: String? = null
 
         inline fun <reified T> context(noinline block: @GraphQLDSL RoutingCall.() -> T?) = context(typeOf<T>(), block)
         fun <T> context(type: KType, block: @GraphQLDSL RoutingCall.() -> T?) {
@@ -32,6 +33,11 @@ class GraphQLFeature(val configuration: Configuration) {
 
             val routing: Routing.() -> Unit = {
                 route(config.endpoint) {
+                    config.playgroundHtml?.let {
+                        get {
+                            call.respondText(it, ContentType.Text.Html)
+                        }
+                    }
 
                     post {
                         val payload = call.receive<JsonObject>()

@@ -298,8 +298,8 @@ class SchemaBuilder {
                     resolver {
                         val nonNull = type.withNullability(false)
                         when {
-                            !type.isMarkedNullable -> __TypeKind.NON_NULL
                             type.classifier == List::class -> __TypeKind.LIST
+                            !type.isMarkedNullable -> __TypeKind.NON_NULL
                             enumMap.containsKey(nonNull) -> __TypeKind.ENUM
                             interfaceMap.containsKey(nonNull) -> __TypeKind.INTERFACE
                             typeMap.containsKey(nonNull) || type == typeOf<Query?>() || type == typeOf<Mutation?>() || type == typeOf<Subscription?>() -> __TypeKind.OBJECT
@@ -484,6 +484,10 @@ class SchemaBuilder {
                 }
             }
 
+            type<__Directive> {
+
+            }
+
             enum(__TypeKind.entries)
 
             query("__schema") {
@@ -501,14 +505,18 @@ class SchemaBuilder {
             }
         }
 
-        for (type in requestedTypes) {
-            val t = type.withNullability(false)
-
-            if (!typeMap.containsKey(t) && !enumMap.containsKey(t)) {
-                if ((t.classifier as KClass<*>?) !in EXCLUDED_CLASSES) {
-                    throw IllegalStateException("Type $t was returned, but not defined in the schema!")
+        fun ensureType(type: KType) {
+            if (!typeMap.containsKey(type) && !enumMap.containsKey(type)) {
+                if ((type.classifier as KClass<*>?) !in EXCLUDED_CLASSES) {
+                    throw IllegalStateException("Type $type was returned, but not defined in the schema!")
+                } else if (type.classifier == List::class) {
+                    ensureType(type.arguments[0].type!!.withNullability(false))
                 }
             }
+        }
+
+        for (type in requestedTypes) {
+            ensureType(type.withNullability(false))
         }
 
         return Schema(typeMap, enumMap, interfaceMap, queries, mutations)

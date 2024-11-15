@@ -54,7 +54,7 @@ open class GraphQL {
      */
     suspend fun execute(payload: JsonObject, contexts: Map<KType, Any?> = emptyMap()): JsonElement {
         val document = payload["query"]!!.jsonPrimitive.content
-        val operation = payload["operationName"]?.jsonPrimitive?.content
+        val operation = payload["operationName"]?.jsonPrimitive?.contentOrNull
         val variables = payload["variables"]?.jsonObject ?: emptyMap()
         return execute(document, operation, variables, contexts)
     }
