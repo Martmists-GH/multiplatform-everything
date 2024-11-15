@@ -298,8 +298,8 @@ class SchemaBuilder {
                     resolver {
                         val nonNull = type.withNullability(false)
                         when {
-                            type.classifier == List::class -> __TypeKind.LIST
                             !type.isMarkedNullable -> __TypeKind.NON_NULL
+                            type.classifier == List::class -> __TypeKind.LIST
                             enumMap.containsKey(nonNull) -> __TypeKind.ENUM
                             interfaceMap.containsKey(nonNull) -> __TypeKind.INTERFACE
                             typeMap.containsKey(nonNull) || type == typeOf<Query?>() || type == typeOf<Mutation?>() || type == typeOf<Subscription?>() -> __TypeKind.OBJECT
@@ -398,10 +398,10 @@ class SchemaBuilder {
 
                 property("ofType") {
                     resolver {
-                        if (type.classifier == List::class) {
-                            __Type(type.arguments[0].type!!)
-                        } else {
-                            type.takeIf { !it.isMarkedNullable }?.let { __Type(it.withNullability(true)) }
+                        when {
+                            !type.isMarkedNullable -> __Type(type.withNullability(true))
+                            type.classifier == List::class -> __Type(type.arguments[0].type!!)
+                            else -> null
                         }
                     }
                 }
