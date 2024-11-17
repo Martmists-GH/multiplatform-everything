@@ -2,6 +2,7 @@ package com.martmists.multiplatform.graphql
 
 import com.martmists.multiplatform.graphql.ext.gqlName
 import com.martmists.multiplatform.reflect.withNullability
+import kotlinx.coroutines.flow.Flow
 import kotlin.enums.EnumEntries
 import kotlin.reflect.*
 
@@ -11,6 +12,7 @@ class SchemaBuilder {
     private val interfaceMap = mutableMapOf<KType, suspend Any?.() -> KType>()
     private val queries = mutableMapOf<String, Schema.OperationDefinition<*>>()
     private val mutations = mutableMapOf<String, Schema.OperationDefinition<*>>()
+    private val subscriptions = mutableMapOf<String, Schema.SubscriptionDefinition<*>>()
     private val requestedTypes = mutableSetOf<KType>()
 
     abstract class BaseBuilder internal constructor() {
@@ -132,7 +134,6 @@ class SchemaBuilder {
         }
     }
 
-    @GraphQLDSL
     class OperationBuilder<T> internal constructor(private val name: String, private val type: KType): BuilderWithArgument() {
         private var rule: suspend (SchemaRequestContext) -> Boolean = { true }
         private var resolver: (suspend (SchemaRequestContext) -> T)? = null
@@ -155,6 +156,31 @@ class SchemaBuilder {
         internal fun build(): Schema.OperationDefinition<T> {
             require(resolver != null) { "Operation $name has no resolver" }
             return Schema.OperationDefinition(name, description, type, rule, arguments, resolver!!)
+        }
+    }
+
+    class SubscriptionBuilder<T> internal constructor(private val name: String, private val type: KType): BuilderWithArgument() {
+        private var rule: suspend (SchemaRequestContext) -> Boolean = { true }
+        private var resolver: (suspend (SchemaRequestContext) -> Flow<T>)? = null
+
+        /**
+         * Adds an access rule to this operation. If it returns false,
+         * the operation will not be executed.
+         */
+        fun accessRule(rule: @GraphQLDSL suspend (ctx: SchemaRequestContext) -> Boolean) {
+            this.rule = rule
+        }
+
+        /**
+         * Adds a resolver to this operation.
+         */
+        fun resolver(resolver: @GraphQLDSL suspend (ctx: SchemaRequestContext) -> Flow<T>) {
+            this.resolver = resolver
+        }
+
+        internal fun build(): Schema.SubscriptionDefinition<T> {
+            require(resolver != null) { "Operation $name has no resolver" }
+            return Schema.SubscriptionDefinition(name, description, type, rule, arguments, resolver!!)
         }
     }
 
@@ -209,6 +235,17 @@ class SchemaBuilder {
     }
 
     /**
+     * Defines a subscription operation to the schema.
+     */
+    inline fun <reified T> subscription(name: String, noinline block: @GraphQLDSL SubscriptionBuilder<T>.() -> Unit) = subscription(name, typeOf<T>(), block)
+    fun <T> subscription(name: String, type: KType, block: @GraphQLDSL SubscriptionBuilder<T>.() -> Unit) {
+        requestedTypes.add(type)
+        val operationBuilder = SubscriptionBuilder<T>(name, type)
+        operationBuilder.block()
+        subscriptions[name] = operationBuilder.build()
+    }
+
+    /**
      * Whether schema introspection is enabled
      */
     var introspection = true
@@ -257,7 +294,7 @@ class SchemaBuilder {
                             typeOf<Double?>(),
 
                             // Operations
-                            typeOf<Query?>().takeIf { queries.size > 2 },
+                            typeOf<Query?>(),
                             typeOf<Mutation?>().takeIf { mutations.isNotEmpty() },
                             typeOf<Subscription?>().takeIf { false },  // TODO
                         ) +
@@ -270,7 +307,7 @@ class SchemaBuilder {
 
                 property("queryType") {
                     resolver {
-                        __Type(typeOf<Query?>()).takeIf { queries.size > 2 }  // Ignore __schema and __type
+                        __Type(typeOf<Query?>())
                     }
                 }
 
@@ -519,7 +556,7 @@ class SchemaBuilder {
             ensureType(type.withNullability(false))
         }
 
-        return Schema(typeMap, enumMap, interfaceMap, queries, mutations)
+        return Schema(typeMap, enumMap, interfaceMap, queries, mutations, subscriptions)
     }
 
     companion object {

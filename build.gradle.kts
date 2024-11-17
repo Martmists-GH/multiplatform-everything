@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.martmists.multiplatform-everything"
-version = "1.0.6"
+version = "1.1.0"
 
 repositories {
     mavenCentral()
@@ -33,6 +33,7 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
                 implementation("io.ktor:ktor-server-core:3.0.1")
+                implementation("io.ktor:ktor-server-websockets:3.0.1")
             }
         }
 
@@ -56,6 +57,13 @@ kotlin {
 
         val desktopMain by getting {
             dependsOn(jvmMain)
+
+            // Couldn't autogenerate this because the android plugin is present :(
+            kotlin.srcDirs(project.rootDir.resolve("src/desktopMain/java/"))
+
+            dependencies {
+                api("org.antlr:antlr4:4.13.2")
+            }
         }
 
         val desktopTest by getting {

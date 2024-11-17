@@ -4,6 +4,7 @@ import com.martmists.multiplatform.graphql.ext.gqlName
 import com.martmists.multiplatform.graphql.operation.Mutation
 import com.martmists.multiplatform.graphql.operation.Query
 import com.martmists.multiplatform.graphql.operation.SchemaOperation
+import com.martmists.multiplatform.graphql.operation.Subscription
 import com.martmists.multiplatform.graphql.parser.*
 import com.martmists.multiplatform.graphql.parser.ast.Field
 import com.martmists.multiplatform.graphql.parser.ast.FragmentDefinition
@@ -11,6 +12,7 @@ import com.martmists.multiplatform.graphql.parser.ast.OperationDefinition
 import com.martmists.multiplatform.graphql.parser.ast.OperationType
 import com.martmists.multiplatform.reflect.withNullability
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import kotlin.reflect.KClass
@@ -24,7 +26,7 @@ import kotlin.reflect.KType
 @GraphQLDSL
 open class GraphQL {
     private var didInit = false
-    private lateinit var schema: Schema
+    lateinit var schema: Schema
 
     /**
      * A wrapper function for each property accessed.
@@ -52,8 +54,8 @@ open class GraphQL {
      * Executes a GraphQL operation.
      * This function takes a [JsonObject] to easily fit into any web application.
      */
-    suspend fun execute(payload: JsonObject, contexts: Map<KType, Any?> = emptyMap()): JsonElement {
-        val document = payload["query"]!!.jsonPrimitive.content
+    suspend fun execute(payload: JsonObject, contexts: Map<KType, Any?> = emptyMap()): Flow<JsonElement> {
+        val document = payload["query"]?.jsonPrimitive?.content
         val operation = payload["operationName"]?.jsonPrimitive?.contentOrNull
         val variables = payload["variables"]?.jsonObject ?: emptyMap()
         return execute(document, operation, variables, contexts)
@@ -67,33 +69,71 @@ open class GraphQL {
      * @param data The variables to pass into the operation.
      * @return The JSON output. On success, this will have a `data` key. On failure, this will have an `errors` key.
      */
-    suspend fun execute(document: String, operation: String? = null, data: Map<String, Any?> = emptyMap(), contexts: Map<KType, Any?> = emptyMap()): JsonElement {
-        val lexer = GraphQLLexer(document)
-        val prog = lexer.parseExecutableDocument()
-        val fragments = prog.definitions.filterIsInstance<FragmentDefinition>()
-        val ops = prog.definitions.filterIsInstance<OperationDefinition>()
-        val selectedOp = ops.find { it.name == operation } ?: throw IllegalArgumentException("Unable to execute op: $operation")
-
+    suspend fun execute(document: String?, operation: String? = null, data: Map<String, Any?> = emptyMap(), contexts: Map<KType, Any?> = emptyMap()): Flow<JsonElement> {
         try {
-            val o = when (selectedOp.type) {
-                OperationType.QUERY -> execute(
-                    Query.make(schema, selectedOp, data, fragments, contexts),
-                    schema.queries
-                )
+            if (document == null) {
+                throw GraphQLException("Must provide query string.")
+            }
 
-                OperationType.MUTATION -> execute(
-                    Mutation.make(schema, selectedOp, data, fragments, contexts),
-                    schema.mutations
-                )
+            val lexer = GraphQLLexer(document)
+            val prog = try {
+                lexer.parseExecutableDocument()
+            } catch (e: IllegalArgumentException) {
+                throw GraphQLException("Syntax Error occurred parsing document.")
+            }
+            val fragments = prog.definitions.filterIsInstance<FragmentDefinition>()
+            val ops = prog.definitions.filterIsInstance<OperationDefinition>()
+
+            if (ops.isEmpty()) {
+                throw GraphQLException("Must provide query string.")
+            }
+
+            val selectedOp = when (operation) {
+                null -> {
+                    if (ops.size > 1) {
+                        throw GraphQLException("Must provide operation name if query contains multiple operations.")
+                    }
+                    ops.first()
+                }
+                else -> ops.find { it.name == operation } ?: throw GraphQLException("Unknown operation named \"$operation\"")
+            }
+
+            return when (selectedOp.type) {
+                OperationType.QUERY -> {
+                    val item = execute(
+                        Query.make(schema, selectedOp, data, fragments, contexts),
+                        schema.queries
+                    )
+                    flowOf(
+                        buildJsonObject {
+                            put("data", item)
+                        }
+                    )
+                }
+
+                OperationType.MUTATION -> {
+                    val item = execute(
+                        Mutation.make(schema, selectedOp, data, fragments, contexts),
+                        schema.mutations
+                    )
+                    flowOf(
+                        buildJsonObject {
+                            put("data", item)
+                        }
+                    )
+                }
+
+                OperationType.SUBSCRIPTION -> {
+                    return executeSubscription(
+                        Subscription.make(schema, selectedOp, data, fragments, contexts),
+                        schema.subscriptions
+                    )
+                }
 
                 else -> TODO()
             }
-
-            return buildJsonObject {
-                put("data", o)
-            }
         } catch (e: GraphQLException) {
-            return buildJsonObject {
+            val res = buildJsonObject {
                 val errors = buildJsonArray {
                     for (err in e.errors) {
                         add(buildJsonObject {
@@ -124,10 +164,30 @@ open class GraphQL {
                 }
                 put("errors", errors)
             }
+            return flowOf(res)
+        }
+    }
+
+    private suspend fun executeSubscription(operation: Subscription, defMap: Map<String, Schema.SubscriptionDefinition<*>>): Flow<JsonElement> {
+        require(operation.fields.size == 1)  // TODO: Error if needed
+
+        val field = operation.fields.first()
+        var flow: Flow<JsonElement> = emptyFlow()
+
+        wrapper {
+            flow = executeSubscription(operation, defMap[field.name] ?: throw GraphQLException("Cannot query field \"${field.name}\" on type \"${operation.type}\".", field.loc), field)
+        }
+
+        return flow.map {
+            buildJsonObject {
+                put(field.alias ?: field.name, it)
+            }
         }
     }
 
     private suspend fun execute(operation: SchemaOperation, defMap: Map<String, Schema.OperationDefinition<*>>): JsonElement {
+        require(operation !is Subscription)
+
         return buildJsonObject {
             val errors = mutableListOf<GraphQLException.GraphQLError>()
             coroutineScope {
@@ -170,11 +230,27 @@ open class GraphQL {
         }
     }
 
+    private suspend fun executeSubscription(operation: Subscription, def: Schema.SubscriptionDefinition<*>, field: Field): Flow<JsonElement> {
+        val ctx = operation.context.withArguments(field.arguments)
+
+        if (!def.rule(operation.context)) {
+            throw GraphQLException("You don't have permission to access this.")
+        }
+
+        parseVariables(ctx, field, def.arguments)
+        val res = def.resolver.invoke(ctx)
+
+        return res.map {
+            val type = schema.interfaceMap[def.ret.withNullability(false)]?.invoke(it) ?: def.ret
+            mapJson(operation, it, type, operation.context.expand(type, field.selectionSet))
+        }
+    }
+
     private suspend fun execute(operation: SchemaOperation, def: Schema.OperationDefinition<*>, field: Field): JsonElement {
         val ctx = operation.context.withArguments(field.arguments)
 
         if (!def.rule(operation.context)) {
-            throw IllegalStateException("Unable to access field!")
+            throw GraphQLException("You don't have permission to access this.")
         }
 
         parseVariables(ctx, field, def.arguments)

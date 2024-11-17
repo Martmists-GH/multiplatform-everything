@@ -9,6 +9,9 @@ Everything is licensed BSD 3-Clause (NON-AI), PRs are welcome.
 - Multiplatform WeakRef/WeakMap/WeakValueMap
 - Binary editing tools (ByteArray only)
 - Kotlinx.coroutines GraphQL implementation
+  - Only server is multiplatform
+  - Subscriptions are a custom protocol currently, with plans to migrate to the `graphql-transport-ws` protocol.
+  - JVM-only codegen is provided in the `graphql-client-codegen` directory.
 - Validation library
   - Email
   - URI
@@ -24,6 +27,8 @@ repositories {
 }
 
 dependencies {
-    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.0.6")
+    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.1.0")
 }
 ```
+
+Alternatively you can just lift the code you need as-is, provided you respect the LICENSE file.

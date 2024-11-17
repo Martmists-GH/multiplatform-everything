@@ -1,5 +1,6 @@
 package com.martmists.multiplatform.graphql
 
+import kotlinx.coroutines.flow.Flow
 import kotlin.enums.EnumEntries
 import kotlin.reflect.KType
 
@@ -9,6 +10,7 @@ class Schema internal constructor(
     val interfaceMap: Map<KType, suspend Any?.() -> KType>,
     val queries: Map<String, OperationDefinition<*>>,
     val mutations: Map<String, OperationDefinition<*>>,
+    val subscriptions: Map<String, SubscriptionDefinition<*>>,
 ) {
     data class PropertyDefinition<T, R>(
         val name: String,
@@ -40,5 +42,14 @@ class Schema internal constructor(
         val rule: suspend (SchemaRequestContext) -> Boolean,
         val arguments: Map<String, KType>,
         val resolver: suspend (SchemaRequestContext) -> T
+    )
+
+    data class SubscriptionDefinition<T>(
+        val name: String,
+        val description: String?,
+        val ret: KType,
+        val rule: suspend (SchemaRequestContext) -> Boolean,
+        val arguments: Map<String, KType>,
+        val resolver: suspend (SchemaRequestContext) -> Flow<T>
     )
 }
