@@ -45,7 +45,7 @@ class GraphQLGeneratingListener(outputDir: File, packageName: String, private va
         val type = ctx.typeSpec().text
 
         if ((ctx.argList()?.text ?: "").isNotBlank()) {
-            val args = ctx.argList().argument().map {
+            val args = ctx.argList()!!.argument().map {
                 val pName = it.anyName().text
                 val pType = it.typeSpec().text
                 PropertyDef(pName, parseType(pType))
@@ -84,7 +84,7 @@ class GraphQLGeneratingListener(outputDir: File, packageName: String, private va
         }
     }
 
-    override fun exitGraphqlSchema(ctx: GraphQLParser.GraphqlSchemaContext?) {
+    override fun exitGraphqlSchema(ctx: GraphQLParser.GraphqlSchemaContext) {
         codeEmitter.emitCore(!hasSubscriptions)
     }
 }

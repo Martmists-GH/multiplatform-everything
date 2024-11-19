@@ -11,9 +11,12 @@ plugins {
 group = "com.martmists.multiplatform-everything"
 version = "1.1.1"
 
-repositories {
-    mavenCentral()
+allprojects {
+    repositories {
+        mavenCentral()
+    }
 }
+
 
 kotlin {
     jvm("desktop")
