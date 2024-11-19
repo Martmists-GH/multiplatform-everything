@@ -184,7 +184,7 @@ class SchemaBuilder {
         }
     }
 
-    inline fun <reified T : Any> interfaceType(noinline block: @GraphQLDSL InterfaceTypeBuilder<*>.() -> Unit) = interfaceType<T>(typeOf<T>(), block)
+    inline fun <reified T : Any> interfaceType(noinline block: @GraphQLDSL InterfaceTypeBuilder<T>.() -> Unit) = interfaceType<T>(typeOf<T>(), block)
     fun <T : Any> interfaceType(type: KType, block: @GraphQLDSL InterfaceTypeBuilder<T>.() -> Unit) {
         val builder = InterfaceTypeBuilder<T>(type)
         builder.block()
