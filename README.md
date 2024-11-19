@@ -10,7 +10,7 @@ Everything is licensed BSD 3-Clause (NON-AI), PRs are welcome.
 - Binary editing tools (ByteArray only)
 - Kotlinx.coroutines GraphQL implementation
   - Only server is multiplatform
-  - Subscriptions are a custom protocol currently, with plans to migrate to the `graphql-transport-ws` protocol.
+  - Subscriptions use the [`graphql-transport-ws` protocol](https://github.com/enisdenjo/graphql-ws/blob/master/PROTOCOL.md).
   - JVM-only codegen is provided in the `graphql-client-codegen` directory.
 - Validation library
   - Email
@@ -27,7 +27,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.1.0")
+    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.1.1")
 }
 ```
 

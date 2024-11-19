@@ -7,3 +7,5 @@ pluginManagement {
 }
 
 rootProject.name = "multiplatfom-everything"
+
+include(":graphql-client-codegen")

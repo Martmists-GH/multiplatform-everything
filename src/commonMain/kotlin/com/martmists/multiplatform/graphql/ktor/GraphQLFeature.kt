@@ -2,6 +2,8 @@ package com.martmists.multiplatform.graphql.ktor
 
 import com.martmists.multiplatform.graphql.GraphQL
 import com.martmists.multiplatform.graphql.GraphQLDSL
+import com.martmists.multiplatform.graphql.ktor.transport.WebsocketTransportMessage
+import com.martmists.multiplatform.graphql.ktor.transport.WebsocketTransportMessageType
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -10,12 +12,17 @@ import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.util.*
 import io.ktor.websocket.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlin.reflect.KType
 import kotlin.reflect.typeOf
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 class GraphQLFeature(val configuration: Configuration) {
     class Configuration : GraphQL() {
@@ -30,6 +37,11 @@ class GraphQLFeature(val configuration: Configuration) {
          * The endpoint graphql will listen on for subscriptions.
          */
         var subscriptionEndpoint: String = "/subscription"
+
+        /**
+         * The timeout for websocket connections to send an initialization message.
+         */
+        var subscriptionTimeout: Duration = 1.seconds
 
         /**
          * The HTML to display on the graphql endpoint.
@@ -63,8 +75,7 @@ class GraphQLFeature(val configuration: Configuration) {
                         contexts[typeOf<ApplicationCall>()] = call
 
                         val result = config.execute(payload, contexts)
-
-                        call.respondText(result.first().toString(), ContentType.Application.Json)
+                        call.respond(result.first())
                     }
                 }
 
@@ -73,15 +84,87 @@ class GraphQLFeature(val configuration: Configuration) {
 
                     route(config.subscriptionEndpoint) {
                         webSocket {
+                            var exit = false
+
+                            val payload = withTimeoutOrNull(config.subscriptionTimeout) {
+                                while (true) {
+                                    val frame = incoming.receive()
+                                    if (frame is Frame.Text) {
+                                        val json = Json.decodeFromString<WebsocketTransportMessage>(frame.readText())
+                                        if (json.type != WebsocketTransportMessageType.CONNECTION_INIT) {
+                                            close(CloseReason(4400, "No connection init message"))
+                                            exit = true
+                                        } else {
+                                            return@withTimeoutOrNull json
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (exit) return@webSocket
+                            if (payload == null) {
+                                close(CloseReason(4408, "Connection initialisation timeout"))
+                                return@webSocket
+                            }
+
+                            outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.CONNECTION_ACK))))
+
                             val contexts = config.contexts.mapValues { (_, v) -> v(call) }.toMutableMap()
                             contexts[typeOf<ApplicationCall>()] = call
+                            val listeners = mutableMapOf<String, Job>()
 
-                            val frame = incoming.receive()
-                            if (frame is Frame.Text) {
-                                val json = Json.decodeFromString<JsonObject>(frame.readText())
-                                val result = config.execute(json, contexts)
-                                result.collect { item ->
-                                    outgoing.send(Frame.Text(item.toString()))
+                            coroutineScope {
+                                for (frame in incoming) {
+                                    if (frame is Frame.Text) {
+                                        val json = Json.decodeFromString<WebsocketTransportMessage>(frame.readText())
+                                        when (json.type) {
+                                            WebsocketTransportMessageType.PING -> {
+                                                outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.PONG))))
+                                            }
+
+                                            WebsocketTransportMessageType.PONG -> {}
+                                            WebsocketTransportMessageType.SUBSCRIBE -> {
+                                                if (json.id == null || json.payload == null) {
+                                                    close(CloseReason(4400, "id or payload missing"))
+                                                    break
+                                                }
+
+                                                if (json.id in listeners) {
+                                                    close(CloseReason(4409, "Subscribe for ${json.id} already exists"))
+                                                    break
+                                                }
+
+                                                val flow = config.execute(json.payload.jsonObject, contexts)
+                                                listeners[json.id] = launch {
+                                                    flow.collect {
+                                                        val obj = it.jsonObject
+                                                        if ("errors" in obj) {
+                                                            outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.ERROR, json.id, obj["errors"]))))
+                                                            listeners.remove(json.id)?.cancel()
+                                                        } else {
+                                                            outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.NEXT, json.id, it))))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            WebsocketTransportMessageType.COMPLETE -> {
+                                                if (json.id == null) {
+                                                    close(CloseReason(4400, "id missing"))
+                                                    return@coroutineScope
+                                                }
+
+                                                listeners.remove(json.id)?.cancel()
+                                            }
+                                            else -> {
+                                                close(CloseReason(4400, "Illegal message type"))
+                                                break
+                                            }
+                                        }
+                                    }
+                                }
+
+                                for (key in listeners.keys.toList()) {
+                                    listeners.remove(key)?.cancel()
                                 }
                             }
                         }
@@ -95,3 +178,4 @@ class GraphQLFeature(val configuration: Configuration) {
         }
     }
 }
+

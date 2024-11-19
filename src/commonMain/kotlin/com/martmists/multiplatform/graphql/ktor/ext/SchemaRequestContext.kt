@@ -4,4 +4,4 @@ import com.martmists.multiplatform.graphql.SchemaRequestContext
 import io.ktor.server.application.*
 
 val SchemaRequestContext.call: ApplicationCall
-    get() = context()!!
+    get() = context<ApplicationCall>()!!

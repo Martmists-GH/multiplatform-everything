@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.martmists.multiplatform-everything"
-version = "1.1.0"
+version = "1.1.1"
 
 repositories {
     mavenCentral()
@@ -20,6 +20,11 @@ kotlin {
     js(IR) {
         nodejs()
         browser()
+    }
+    wasmJs {
+        browser()
+        nodejs()
+        binaries.library()
     }
     androidTarget()
     mingwX64()
@@ -47,6 +52,10 @@ kotlin {
             dependsOn(commonMain)
         }
 
+        val wasmJsMain by getting {
+            dependsOn(commonMain)
+        }
+
         val jvmMain by creating {
             dependsOn(commonMain)
         }
@@ -57,13 +66,6 @@ kotlin {
 
         val desktopMain by getting {
             dependsOn(jvmMain)
-
-            // Couldn't autogenerate this because the android plugin is present :(
-            kotlin.srcDirs(project.rootDir.resolve("src/desktopMain/java/"))
-
-            dependencies {
-                api("org.antlr:antlr4:4.13.2")
-            }
         }
 
         val desktopTest by getting {

@@ -19,36 +19,53 @@ class GraphQLCodeGenerator(outputDir: File, private val packageName: String) {
     fun emitCore(omitSubscriptions: Boolean) {
         val file = outputDir.resolve("core.kt")
 
-        val subscriptionImports = if (omitSubscriptions) "" else "import io.ktor.client.plugins.websocket.*\nimport io.ktor.websocket.*\nimport kotlinx.coroutines.flow.*"
-        val subscriptionChunk = if (omitSubscriptions) "" else """suspend fun <T> subscription(block: @GraphDsl SubscriptionDSL.() -> Subscription<T>): Pair<Flow<T>, () -> Unit> {
+        val subscriptionImports = if (omitSubscriptions) "" else "import io.ktor.client.plugins.websocket.*\nimport io.ktor.websocket.*\nimport kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*"
+        val subscriptionChunk = if (omitSubscriptions) "" else """suspend fun <T> subscription(scope: CoroutineScope? = null, block: @GraphDsl SubscriptionDSL.() -> Subscription<T>): Pair<Flow<T>, () -> Unit> {
         val query = SubscriptionDSL().block()
-        return execute(query)
+        return execute(scope, query)
     }
     
-    suspend fun <T> execute(query: Subscription<T>): Pair<Flow<T>, () -> Unit> {
+    @OptIn(ExperimentalUuidApi::class)
+    suspend fun <T> execute(scope: CoroutineScope?, query: Subscription<T>): Pair<Flow<T>, () -> Unit> {
         val flow = MutableSharedFlow<T>()
         var mustClose = false
     
-        client.webSocket(url) {
-            outgoing.send(Frame.Text(buildJsonObject {
-                put("query", query.query())
-                put("variables", buildJsonObject {
-                    query.variables.forEach { (name, variable) ->
-                        put(name, json.encodeToJsonElement(variable.serializer as SerializationStrategy<Any?>, variable.value))
+        (scope ?: GlobalScope).launch {
+            client.webSocket(subscriptionUrl) {
+                val id = Uuid.random().toHexString()
+                outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.CONNECTION_INIT))))
+    
+                while (!mustClose) {
+                    val frame = incoming.receive()
+                    if (frame is Frame.Text) {
+                        val res = json.decodeFromString<WebsocketTransportMessage>(frame.readText())
+                        when (res.type) {
+                            WebsocketTransportMessageType.CONNECTION_ACK -> {
+                                val payload = buildJsonObject {
+                                    put("query", query.query())
+                                    put("variables", buildJsonObject {
+                                        query.variables.forEach { (name, variable) ->
+                                            put(name, json.encodeToJsonElement(variable.serializer as SerializationStrategy<Any?>, variable.value))
+                                        }
+                                    })
+                                }
+                                outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.SUBSCRIBE, id, payload))))
+                            }
+                            WebsocketTransportMessageType.NEXT -> {
+                                flow.emit(query.constructor(res.payload!!.jsonObject))                                                    
+                            }
+                            WebsocketTransportMessageType.ERROR -> {
+                                val errors = res.payload!!.jsonArray
+                                throw GraphQLException(errors)
+                            }
+                            WebsocketTransportMessageType.COMPLETE -> {
+                                mustClose = true
+                            }
+                            else -> {
+                                // Do nothing
+                            }
+                        }
                     }
-                })
-            }.toString()))
-
-            while (!mustClose) {
-                val frame = incoming.receive()
-                if (frame is Frame.Text) {
-                    val res = json.decodeFromString<JsonObject>(frame.readText())
-                    val data = res["data"] as JsonObject?
-                    val errors = res["errors"] as JsonArray?
-                    if (errors != null) {
-                        throw GraphQLException(errors)
-                    }
-                    flow.emit(query.constructor(data))
                 }
             }
         }
@@ -69,12 +86,39 @@ import io.ktor.http.*
 $subscriptionImports
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
+import kotlin.uuid.*
 
 typealias ID = String
 
 @Target(AnnotationTarget.TYPE)
 @DslMarker
 annotation class GraphDsl
+
+@Serializable
+data class WebsocketTransportMessage(
+    val type: WebsocketTransportMessageType,
+    val id: String? = null,
+    val payload: JsonElement? = null,
+)
+
+enum class WebsocketTransportMessageType {
+    @SerialName("connection_init")
+    CONNECTION_INIT,
+    @SerialName("connection_ack")
+    CONNECTION_ACK,
+    @SerialName("ping")
+    PING,
+    @SerialName("pong")
+    PONG,
+    @SerialName("subscribe")
+    SUBSCRIBE,
+    @SerialName("next")
+    NEXT,
+    @SerialName("error")
+    ERROR,
+    @SerialName("complete")
+    COMPLETE,
+}
 
 class Variable<T>(val type: String, val value: T, val serializer: SerializationStrategy<T>) {
     companion object {
@@ -140,7 +184,7 @@ class Subscription<T>(private val type: String, private val document: String, in
 
 class GraphQLException(val errors: JsonArray) : Exception()
 
-class GraphQLClient(private val client: HttpClient, private val url: String, private val configure: JsonBuilder.() -> Unit = {}) {
+class GraphQLClient(private val client: HttpClient, private val url: String, private val subscriptionUrl: String, private val configure: JsonBuilder.() -> Unit = {}) {
     private val json = Json {
         explicitNulls = false
         configure()
@@ -160,6 +204,7 @@ class GraphQLClient(private val client: HttpClient, private val url: String, pri
     
     suspend fun <T> execute(query: Query<T>): T {
         val response = client.post(url) {
+            header("Accept", "application/json")
             header("Content-Type", "application/json")
             setBody(buildJsonObject {
                 put("query", query.query())
