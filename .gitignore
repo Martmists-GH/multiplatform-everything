@@ -1,7 +1,10 @@
 .idea/
 .gradle/
 .kotlin/
-build/*
+**/build/*
 kotlin-js-store/
 local.properties
-!/graphql-client-codegen/build/generatedAntlr/
+!graphql-client-codegen/build/generatedAntlr/
+*.tokens
+*.interp
+
