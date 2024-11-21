@@ -1,4 +1,4 @@
-// Generated from C:/Users/micha/IdeaProjects/multiplatform-everything/graphql-client-codegen/antlr/GraphQL.g4 by ANTLR 4.13.1
+// Generated from /home/mart/git/kotlin/multiplatfom-everything/graphql-client-codegen/src/main/antlr/GraphQL.g4 by ANTLR 4.13.1
 package com.martmists.multiplatform.graphql.codegen
 
 import org.antlr.v4.kotlinruntime.*

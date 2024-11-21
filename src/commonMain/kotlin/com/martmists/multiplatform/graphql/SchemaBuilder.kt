@@ -114,6 +114,11 @@ class SchemaBuilder {
         }
 
         internal fun build(): Schema.TypeDefinition<T> {
+            property("__typename") {
+                resolver {
+                    type.gqlName
+                }
+            }
             return Schema.TypeDefinition(type.withNullability(true).gqlName, description, type, properties, interfaces)
         }
     }
@@ -130,6 +135,11 @@ class SchemaBuilder {
 
         internal fun build(): Pair<Schema.TypeDefinition<T>, (suspend T.() -> KType)> {
             require(typeResolver != null) { "Interface ${type.gqlName} has no resolver" }
+            property("__typename") {
+                resolver {
+                    typeResolver!!.invoke(this).gqlName
+                }
+            }
             return Schema.TypeDefinition(type.withNullability(true).gqlName, description, type, properties, emptyList()) to typeResolver!!
         }
     }
