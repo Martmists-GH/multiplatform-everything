@@ -1,5 +1,7 @@
 package com.martmists.multiplatform.logging
 
+import kotlin.reflect.typeOf
+
 interface Logger {
     fun debug(message: String)
     fun debug(message: String, error: Throwable)
@@ -16,3 +18,4 @@ interface Logger {
 }
 
 expect fun makeLogger(name: String): Logger
+inline fun <reified T> makeLogger(): Logger = makeLogger(T::class.qualifiedName ?: error("Unable to create logger for anonymous classes"))
