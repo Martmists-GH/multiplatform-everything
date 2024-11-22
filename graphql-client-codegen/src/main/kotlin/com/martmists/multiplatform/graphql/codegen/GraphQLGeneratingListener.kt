@@ -38,8 +38,10 @@ class GraphQLGeneratingListener(outputDir: File,
         val type = GQLType(
             kind = TypeKind.OBJECT,
             name = typeName,
-            properties = fields.associate { it.anyName().nameTokens()!!.text to parseType(it.typeSpec()) },
-            methods = emptyMap(),  // TODO I'll implement it when I need it tbh
+            properties = fields.filter { it.argList()?.isEmpty != false }.associate { it.anyName().nameTokens()!!.text to parseType(it.typeSpec()) },
+            methods = fields.filter { it.argList()?.isEmpty == false }.associate {
+                it.anyName().nameTokens()!!.text to GQLMethod(it.anyName().nameTokens()!!.text, parseType(it.typeSpec()), it.argList()!!.argument().associate { arg -> arg.anyName().nameTokens()!!.text to parseType(arg.typeSpec()) })
+            },
             interfaces = ctx.implementationDef()?.Name()?.map { GQLTypeRef(it.text) } ?: emptyList(),
         )
         typeRegistry.add(type)
@@ -57,8 +59,10 @@ class GraphQLGeneratingListener(outputDir: File,
         val type = GQLType(
             kind = TypeKind.INTERFACE,
             name = itfName,
-            properties = fields.associate { it.anyName().nameTokens()!!.text to parseType(it.typeSpec()) },
-            methods = emptyMap(),  // TODO I'll implement it when I need it tbh
+            properties = fields.filter { it.argList()?.isEmpty != false }.associate { it.anyName().nameTokens()!!.text to parseType(it.typeSpec()) },
+            methods = fields.filter { it.argList()?.isEmpty == false }.associate {
+                it.anyName().nameTokens()!!.text to GQLMethod(it.anyName().nameTokens()!!.text, parseType(it.typeSpec()), it.argList()!!.argument().associate { arg -> arg.anyName().nameTokens()!!.text to parseType(arg.typeSpec()) })
+            },
         )
         typeRegistry.add(type)
     }
