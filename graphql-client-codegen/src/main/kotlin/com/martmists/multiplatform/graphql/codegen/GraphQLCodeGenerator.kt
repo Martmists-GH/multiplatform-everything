@@ -133,6 +133,7 @@ fun $name(${method.arguments.entries.joinToString(", ") { (k, v) -> "$k: ${argTy
 package $packageName
 
 import kotlinx.serialization.json.*
+import kotlinx.serialization.*
 
 class ${type.name}(private val json: JsonObject)${if (type.interfaces.isEmpty()) "" else ": ${type.interfaces.joinToString(", ") { it.name }}"} {
 ${type.properties.entries.joinToString("\n") { (k, v) -> emitProperty(k, v, type.interfaces.any { registry.resolve(it).properties.containsKey(k) }).prependIndent("    ") }}
@@ -173,6 +174,8 @@ enum class ${type.name} {
         emit("${type.name}.kt", """
 package $packageName
 
+import kotlinx.serialization.*
+
 interface ${type.name} {
     ${type.properties.entries.joinToString("\n    ") { (k, v) -> "val $k: ${typeString(v)}" }}
     ${type.methods.entries.joinToString("\n    ") { (k, v) -> "val $k: ${typeString(v.returnType)}" }}
@@ -195,7 +198,11 @@ ${type.methods.entries.joinToString("\n    ") { (k, v) -> emitPropertyDSL(k, v) 
         val nestedBuilder = query.`__internal-builder`()
         builder.fragment(query::class.simpleName!!, nestedBuilder)
     }
-}""")
+}
+
+@Serializable
+sealed interface ${type.name}Model
+""")
     }
 
     private fun emitProperty(name: String, type: GQLTypeRef, isOverride: Boolean): String {
