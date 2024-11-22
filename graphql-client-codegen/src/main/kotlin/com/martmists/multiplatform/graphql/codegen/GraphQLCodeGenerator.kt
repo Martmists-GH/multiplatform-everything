@@ -38,8 +38,8 @@ import kotlinx.serialization.json.*
 
 class QueryDSL {
 ${queryType.properties.entries.joinToString("\n") { (k, v) -> emitQueryDSL(k, v, "query", "Query").trim().prependIndent("    ") }}
-}
-        """)
+${queryType.methods.entries.joinToString("\n") { (k, v) -> emitQueryDSL(k, v, "query", "Query").trim().prependIndent("    ") }}
+}""")
     }
 
     private fun emitMutation() {
@@ -52,8 +52,8 @@ import kotlinx.serialization.json.*
 
 class MutationDSL {
 ${mutationType.properties.entries.joinToString("\n") { (k, v) -> emitQueryDSL(k, v, "mutation", "Query").trim().prependIndent("    ") }}
-}
-        """)
+${mutationType.methods.entries.joinToString("\n") { (k, v) -> emitQueryDSL(k, v, "mutation", "Query").trim().prependIndent("    ") }}
+}""")
     }
 
     private fun emitSubscription() {
@@ -66,8 +66,8 @@ import kotlinx.serialization.json.*
 
 class SubscriptionDSL {
 ${subscriptionType.properties.entries.joinToString("\n") { (k, v) -> emitQueryDSL(k, v, "subscription", "Subscription").trim().prependIndent("    ") }}
-}
-        """)
+${subscriptionType.methods.entries.joinToString("\n") { (k, v) -> emitQueryDSL(k, v, "subscription", "Subscription").trim().prependIndent("    ") }}
+}""")
     }
 
     private fun emitQueryDSL(name: String, type: GQLTypeRef, queryKind: String, objectKind: String): String {
@@ -81,7 +81,7 @@ val $name: $objectKind<${typeString(type)}>
         builder.attr("$name")
         val (document, variables) = builder.build()
         return $objectKind("$queryKind", document, variables, { ${emitGetter("it?.get(\"$name\")", type)} })
-    }           """
+    }"""
             }
             else -> {
                 """
@@ -92,8 +92,36 @@ fun $name(block: @GraphQLDSL ${inType.name}DSL.() -> Unit): $objectKind<${typeSt
     }
     val (document, variables) = builder.build()
     return $objectKind("$queryKind", document, variables, { ${emitGetter("it?.get(\"$name\")", type)} })
-}
+}"""
+            }
+        }
+    }
+
+    private fun emitQueryDSL(name: String, method: GQLMethod, queryKind: String, objectKind: String): String {
+        val type = method.returnType
+        val inType = registry.resolveInner(registry.resolve(type))
+        return when (inType.kind) {
+            TypeKind.SCALAR, TypeKind.ENUM -> {
                 """
+fun $name(${method.arguments.entries.joinToString(", ") { (k, v) -> "$k: ${argTypeString(v)}" }}): $objectKind<${typeString(type)}> {
+    val builder = QueryBuilder()
+    builder.attr("$name", listOf(${method.arguments.keys.joinToString(", ") { "\"$it\"" }}))
+    builder.variables.putAll(mapOf(${method.arguments.entries.joinToString(", ") { (k, v) -> "\"$k\" to Variable.make(\"${gqlTypeString(v)}\", $k)" }}))
+    val (document, variables) = builder.build()
+    return $objectKind("$queryKind", document, variables, { ${emitGetter("it?.get(\"$name\")", type)} })
+}"""
+            }
+            else -> {
+                """
+fun $name(${method.arguments.entries.joinToString(", ") { (k, v) -> "$k: ${argTypeString(v)}" }}, block: @GraphQLDSL ${inType.name}DSL.() -> Unit): $objectKind<${typeString(type)}> {
+    val builder = QueryBuilder()
+    builder.scope("$name") {
+        ${inType.name}DSL(this).block()
+    }
+    builder.variables.putAll(mapOf(${method.arguments.entries.joinToString(", ") { (k, v) -> "\"$k\" to Variable.make(\"${gqlTypeString(v)}\", $k)" }}))
+    val (document, variables) = builder.build()
+    return $objectKind("$queryKind", document, variables, { ${emitGetter("it?.get(\"$name\")", type)} })
+}"""
             }
         }
     }
@@ -108,6 +136,7 @@ import kotlinx.serialization.json.*
 
 class ${type.name}(private val json: JsonObject)${if (type.interfaces.isEmpty()) "" else ": ${type.interfaces.joinToString(", ") { it.name }}"} {
 ${type.properties.entries.joinToString("\n") { (k, v) -> emitProperty(k, v, type.interfaces.any { registry.resolve(it).properties.containsKey(k) }).prependIndent("    ") }}
+${type.methods.entries.joinToString("\n") { (k, v) -> emitProperty(k, v.returnType, type.interfaces.any { registry.resolve(it).methods.containsKey(k) }).prependIndent("    ") }}
 ${if (type.interfaces.isEmpty()) "" else """
     companion object {
         operator fun invoke(block: ${type.name}DSL.() -> Unit): ${type.name}DSL {
@@ -116,9 +145,10 @@ ${if (type.interfaces.isEmpty()) "" else """
     }
 """}
 }
-// DSL
+
 class ${type.name}DSL(private val builder: QueryBuilder)${if (type.interfaces.isEmpty()) "" else ": ${type.interfaces.joinToString(", ") { "${it.name}FragmentBase" }}"} {
 ${type.properties.entries.joinToString("\n") { (k, v) -> emitPropertyDSL(k, v).prependIndent("    ") }}
+${type.methods.entries.joinToString("\n") { (k, v) -> emitPropertyDSL(k, v).prependIndent("    ") }}
 ${if (type.interfaces.isEmpty()) "" else """
     @Deprecated("Reserved for internal use", level = DeprecationLevel.ERROR)
     @Suppress("FunctionName")
@@ -126,9 +156,8 @@ ${if (type.interfaces.isEmpty()) "" else """
 """}
 }
 
-// Model
-        """
-        )
+@Serializable
+class ${type.name}Model(${(type.properties + type.methods.mapValues { (k, v) -> v.returnType }).entries.joinToString(", ") { (k, v) -> "val $k: ${argTypeString(v)}${if (v.nullable) " = null" else ""}" }})""")
     }
 
     private fun emitEnum(type: GQLType) {
@@ -137,8 +166,7 @@ package $packageName
 
 enum class ${type.name} {
     ${type.enumValues.joinToString(",\n    ")}
-}
-        """)
+}""")
     }
 
     private fun emitInterface(type: GQLType) {
@@ -147,6 +175,7 @@ package $packageName
 
 interface ${type.name} {
     ${type.properties.entries.joinToString("\n    ") { (k, v) -> "val $k: ${typeString(v)}" }}
+    ${type.methods.entries.joinToString("\n    ") { (k, v) -> "val $k: ${typeString(v.returnType)}" }}
 }
 
 interface ${type.name}FragmentBase {
@@ -155,9 +184,9 @@ interface ${type.name}FragmentBase {
     fun `__internal-builder`(): QueryBuilder
 }
 
-// DSL
 class ${type.name}DSL(private val builder: QueryBuilder) {
 ${type.properties.entries.joinToString("\n    ") { (k, v) -> emitPropertyDSL(k, v) }}
+${type.methods.entries.joinToString("\n    ") { (k, v) -> emitPropertyDSL(k, v) }}
     val fragment: Fragment
         get() = Fragment()
     
@@ -166,8 +195,7 @@ ${type.properties.entries.joinToString("\n    ") { (k, v) -> emitPropertyDSL(k, 
         val nestedBuilder = query.`__internal-builder`()
         builder.fragment(query::class.simpleName!!, nestedBuilder)
     }
-}
-        """)
+}""")
     }
 
     private fun emitProperty(name: String, type: GQLTypeRef, isOverride: Boolean): String {
@@ -204,8 +232,7 @@ ${if (isOverride) "override " else ""}val $name: ${typeString(type)}
     when ($name!!.jsonObject["__typename"]!!.jsonPrimitive.content) {
         ${registry.implementors(type.name).joinToString("\n        ") { "\"${it.name}\" -> ${it.name}($name!!.jsonObject)" }}
         else -> throw IllegalStateException("Unknown typename ${'$'}{$name!!.jsonObject["__typename"]}")
-    }
-                        """.trim()
+    }"""
                     }
                     else -> "${resolved.name}($name!!.jsonObject)"
                 }
@@ -220,8 +247,7 @@ ${if (isOverride) "override " else ""}val $name: ${typeString(type)}
             TypeKind.SCALAR, TypeKind.ENUM -> {
                 """
 val $name: Unit
-    get() = builder.attr("$name")
-                """
+    get() = builder.attr("$name")"""
             }
             else -> {
                 """
@@ -229,8 +255,31 @@ fun $name(block: @GraphQLDSL ${dslType.name}DSL.() -> Unit) {
     builder.scope("$name") {
         ${dslType.name}DSL(this).block()
     }
-}
+}"""
+            }
+        }
+    }
+
+    private fun emitPropertyDSL(name: String, method: GQLMethod): String {
+        val type = method.returnType
+        val dslType = registry.resolveInner(registry.resolve(type))
+
+        return when (dslType.kind) {
+            TypeKind.SCALAR, TypeKind.ENUM -> {
                 """
+fun $name(${method.arguments.entries.joinToString(", ") { (k, v) -> "$k: ${argTypeString(v)}" }}): Unit {
+    builder.attr("$name", listOf(${method.arguments.keys.joinToString(", ") { "\"$it\"" }}))
+    builder.variables.putAll(mapOf(${method.arguments.entries.joinToString(", ") { (k, v) -> "\"$k\" to Variable.make(\"${gqlTypeString(v)}\", $k)" }}))
+}"""
+            }
+            else -> {
+                """
+fun $name(${method.arguments.entries.joinToString(", ") { (k, v) -> "$k: ${argTypeString(v)}" }}, block: @GraphQLDSL ${dslType.name}DSL.() -> Unit) {
+    builder.scope("$name", listOf(${method.arguments.keys.joinToString(", ") { "\"$it\"" }})) {
+        ${dslType.name}DSL(this).block()
+    }
+    builder.variables.putAll(mapOf(${method.arguments.entries.joinToString(", ") { (k, v) -> "\"$k\" to Variable.make(\"${gqlTypeString(v)}\", $k)" }}))
+}"""
             }
         }
     }
@@ -240,6 +289,26 @@ fun $name(block: @GraphQLDSL ${dslType.name}DSL.() -> Unit) {
             type.nullable -> "${typeString(type.ofType!!)}?"
             type.isList -> "List<${typeString(type.ofType!!)}>"
             else -> type.name
+        }
+    }
+
+    private fun gqlTypeString(type: GQLTypeRef): String {
+        val base = when {
+            type.isList -> "List<${gqlTypeString(type.ofType!!)}>"
+            type.nullable -> gqlTypeString(type.ofType!!).removeSuffix("!")
+            else -> type.name
+        }
+        return if (type.nullable) base else "$base!"
+    }
+
+    private fun argTypeString(type: GQLTypeRef): String {
+        return when {
+            type.nullable -> "${argTypeString(type.ofType!!)}?"
+            type.isList -> "List<${argTypeString(type.ofType!!)}>"
+            else -> when (registry.resolve(type).kind) {
+                TypeKind.OBJECT, TypeKind.INTERFACE -> "${type.name}Model"
+                else -> type.name
+            }
         }
     }
 
