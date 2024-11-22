@@ -275,6 +275,7 @@ class SchemaBuilder {
     private class __Field(val name: String, val description: String?, val args: Map<String, KType>, val type: KType) {
         constructor(def: Schema.PropertyDefinition<*, *>) : this(def.name, def.description, def.arguments, def.ret)
         constructor(def: Schema.OperationDefinition<*>) : this(def.name, def.description, def.arguments, def.ret)
+        constructor(def: Schema.SubscriptionDefinition<*>) : this(def.name, def.description, def.arguments, def.ret)
     }
     private class __EnumValue(val value: Enum<*>)
     private class __Directive
@@ -306,10 +307,10 @@ class SchemaBuilder {
                             // Operations
                             typeOf<Query?>(),
                             typeOf<Mutation?>().takeIf { mutations.isNotEmpty() },
-                            typeOf<Subscription?>().takeIf { false },  // TODO
+                            typeOf<Subscription?>().takeIf { subscriptions.isNotEmpty() },
                         ) +
-                                typeMap.keys.map { it.withNullability(true) } +
-                                enumMap.keys.map { it.withNullability(true) }
+                                typeMap.filterValues { !it.name.startsWith("__") }.keys.map { it.withNullability(true) } +
+                                enumMap.filterValues { !it.name.startsWith("__") }.keys.map { it.withNullability(true) }
 
                         types.map(::__Type)
                     }
@@ -329,7 +330,7 @@ class SchemaBuilder {
 
                 property("subscriptionType") {
                     resolver {
-                        __Type(typeOf<Subscription?>()).takeIf { false }  // TODO
+                        __Type(typeOf<Subscription?>()).takeIf { subscriptions.isNotEmpty() }
                     }
                 }
 
@@ -389,13 +390,13 @@ class SchemaBuilder {
                                 queries.filterValues { !it.name.startsWith("__") }.map { (k, v) -> __Field(v) }
                             }
                             typeOf<Mutation?>() -> {
-                                mutations.map { (k, v) -> __Field(v) }
+                                mutations.filterValues { !it.name.startsWith("__") }.map { (k, v) -> __Field(v) }
                             }
                             typeOf<Subscription?>() -> {
-                                emptyList()
+                                subscriptions.filterValues { !it.name.startsWith("__") }.map { (k, v) -> __Field(v) }
                             }
                             else -> {
-                                typeMap[type.withNullability(false)]?.properties?.values?.map(::__Field)
+                                typeMap[type.withNullability(false)]?.properties?.values?.filter { !it.name.startsWith("__") }?.map(::__Field)
                             }
                         }
                     }

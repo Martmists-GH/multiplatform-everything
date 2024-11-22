@@ -120,6 +120,11 @@ class GraphQLTest {
         }
 
     @Test
+    fun testSchemaGeneration() {
+        println(gql.schema.graphqls())
+    }
+
+    @Test
     fun testFragments() {
         runBlocking {
             @Language("graphql")

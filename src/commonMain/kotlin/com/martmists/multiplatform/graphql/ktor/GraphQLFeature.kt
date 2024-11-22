@@ -39,6 +39,12 @@ class GraphQLFeature(val configuration: Configuration) {
         var subscriptionEndpoint: String = "/subscription"
 
         /**
+         * The schema endpoint where the graphqls file will be served.
+         * Set to null to disable.
+         */
+        var schemaEndpoint: String? = "/graphqls"
+
+        /**
          * The timeout for websocket connections to send an initialization message.
          */
         var subscriptionTimeout: Duration = 1.seconds
@@ -168,6 +174,12 @@ class GraphQLFeature(val configuration: Configuration) {
                                 }
                             }
                         }
+                    }
+                }
+
+                config.schemaEndpoint?.let {
+                    get(it) {
+                        call.respondText(config.schema.graphqls(), ContentType.Text.Plain)
                     }
                 }
             }

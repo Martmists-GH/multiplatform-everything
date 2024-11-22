@@ -1,5 +1,6 @@
 package com.martmists.multiplatform.graphql
 
+import com.martmists.multiplatform.graphql.ext.gqlName
 import kotlinx.coroutines.flow.Flow
 import kotlin.enums.EnumEntries
 import kotlin.reflect.KType
@@ -52,4 +53,97 @@ class Schema internal constructor(
         val arguments: Map<String, KType>,
         val resolver: suspend (SchemaRequestContext) -> Flow<T>
     )
+
+    fun graphqls(): String {
+        val sb = StringBuilder()
+        sb.append("scalar Long\n")
+        sb.append("scalar Double\n\n")
+
+        for ((_, enum) in enumMap) {
+            sb.append("enum ${enum.name.removeSuffix("!")} {\n")
+            for (entry in enum.entries) {
+                sb.append("    ${entry.name}\n")
+            }
+            sb.append("}\n\n")
+        }
+
+        fun typeName(type: KType): String {
+            if (type.classifier == List::class) {
+                var t = "[" + typeName(type.arguments[0].type!!) + "]"
+                if (!type.isMarkedNullable) {
+                    t = "$t!"
+                }
+                return t
+            }
+            return type.gqlName
+        }
+
+        for ((ref, type) in typeMap) {
+            if (type.name.startsWith("__")) continue
+
+            val kind = if (ref in interfaceMap) "interface" else "type"
+
+            sb.append("$kind ${type.name.removeSuffix("!")} {\n")
+            for ((name, prop) in type.properties) {
+                if (name.startsWith("__")) continue
+
+                sb.append("    $name")
+                if (prop.arguments.isNotEmpty()) {
+                    sb.append('(')
+                    sb.append(prop.arguments.entries.joinToString(", ") { (k, v) -> "$k: ${typeName(v)}" })
+                    sb.append(')')
+                }
+                sb.append(": ${typeName(prop.ret)}\n")
+            }
+            sb.append("}\n\n")
+        }
+
+        sb.append("type Query {\n")
+        for ((name, query) in queries) {
+            if (name.startsWith("__")) continue
+
+            sb.append("    $name")
+            if (query.arguments.isNotEmpty()) {
+                sb.append('(')
+                sb.append(query.arguments.entries.joinToString(", ") { (k, v) -> "$k: ${typeName(v)}" })
+                sb.append(')')
+            }
+            sb.append(": ${typeName(query.ret)}\n")
+        }
+        sb.append("}\n\n")
+
+        if (mutations.isNotEmpty()) {
+            sb.append("type Mutation {\n")
+            for ((name, mutation) in mutations) {
+                if (name.startsWith("__")) continue
+
+                sb.append("    $name")
+                if (mutation.arguments.isNotEmpty()) {
+                    sb.append('(')
+                    sb.append(mutation.arguments.entries.joinToString(", ") { (k, v) -> "$k: ${typeName(v)}" })
+                    sb.append(')')
+                }
+                sb.append(": ${typeName(mutation.ret)}\n")
+            }
+            sb.append("}\n\n")
+        }
+
+        if (subscriptions.isNotEmpty()) {
+            sb.append("type Subscription {\n")
+            for ((name, subscription) in subscriptions) {
+                if (name.startsWith("__")) continue
+
+                sb.append("    $name")
+                if (subscription.arguments.isNotEmpty()) {
+                    sb.append('(')
+                    sb.append(subscription.arguments.entries.joinToString(", ") { (k, v) -> "$k: ${typeName(v)}" })
+                    sb.append(')')
+                }
+                sb.append(": ${typeName(subscription.ret)}\n")
+            }
+            sb.append("}\n\n")
+        }
+
+        return sb.toString()
+    }
 }
