@@ -60,6 +60,8 @@ class Schema internal constructor(
         sb.append("scalar Double\n\n")
 
         for ((_, enum) in enumMap) {
+            if (enum.name.startsWith("__")) continue
+
             sb.append("enum ${enum.name.removeSuffix("!")} {\n")
             for (entry in enum.entries) {
                 sb.append("    ${entry.name}\n")
