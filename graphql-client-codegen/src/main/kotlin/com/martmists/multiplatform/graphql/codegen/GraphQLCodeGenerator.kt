@@ -176,12 +176,12 @@ package $packageName
 
 import kotlinx.serialization.*
 
-interface ${type.name} {
+sealed interface ${type.name} {
     ${type.properties.entries.joinToString("\n    ") { (k, v) -> "val $k: ${typeString(v)}" }}
     ${type.methods.entries.joinToString("\n    ") { (k, v) -> "val $k: ${typeString(v.returnType)}" }}
 }
 
-interface ${type.name}FragmentBase {
+sealed interface ${type.name}FragmentBase {
     @Deprecated("Reserved for internal use", level = DeprecationLevel.ERROR)
     @Suppress("FunctionName")
     fun `__internal-builder`(): QueryBuilder
