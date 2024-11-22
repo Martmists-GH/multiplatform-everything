@@ -18,4 +18,3 @@ interface Logger {
 }
 
 expect fun makeLogger(name: String): Logger
-inline fun <reified T> makeLogger(): Logger = makeLogger(T::class.qualifiedName ?: error("Unable to create logger for anonymous classes"))

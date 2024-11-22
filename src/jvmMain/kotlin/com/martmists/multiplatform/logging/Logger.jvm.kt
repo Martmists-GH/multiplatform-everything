@@ -18,3 +18,4 @@ open class JvmLogger(name: String) : Logger {
 }
 
 actual fun makeLogger(name: String): Logger = JvmLogger(name)
+inline fun <reified T> makeLogger(): Logger = makeLogger(T::class.qualifiedName ?: error("Unable to create logger for anonymous classes"))

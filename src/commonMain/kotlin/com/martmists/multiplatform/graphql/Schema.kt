@@ -85,7 +85,12 @@ class Schema internal constructor(
 
             val kind = if (ref in interfaceMap) "interface" else "type"
 
-            sb.append("$kind ${type.name.removeSuffix("!")} {\n")
+            sb.append("$kind ${type.name.removeSuffix("!")}")
+            if (type.interfaces.isNotEmpty()) {
+                sb.append(" implements ")
+                sb.append(type.interfaces.joinToString(", ") { typeName(it).removeSuffix("!") })
+            }
+            sb.append(" {\n")
             for ((name, prop) in type.properties) {
                 if (name.startsWith("__")) continue
 
