@@ -409,7 +409,7 @@ class SchemaBuilder {
                                 emptyList()
                             }
                             else -> {
-                                typeMap[type.withNullability(false)]?.interfaces?.map(::__Type)
+                                typeMap[type.withNullability(false)]?.interfaces?.map { __Type(it.withNullability(true)) }
                             }
                         }
                     }
