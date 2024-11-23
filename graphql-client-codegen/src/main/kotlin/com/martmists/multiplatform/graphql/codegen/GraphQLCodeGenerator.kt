@@ -188,6 +188,10 @@ sealed interface ${type.name}FragmentBase {
 }
 
 class ${type.name}DSL(private val builder: QueryBuilder) {
+    init {
+        builder.attr("__typename")
+    }
+
 ${type.properties.entries.joinToString("\n    ") { (k, v) -> emitPropertyDSL(k, v) }}
 ${type.methods.entries.joinToString("\n    ") { (k, v) -> emitPropertyDSL(k, v) }}
     val fragment: Fragment
