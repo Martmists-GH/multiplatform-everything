@@ -13,6 +13,8 @@ import io.ktor.server.websocket.*
 import io.ktor.util.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -90,87 +92,96 @@ class GraphQLFeature(val configuration: Configuration) {
 
                     route(config.subscriptionEndpoint) {
                         webSocket {
-                            var exit = false
+                            runCatching {
+                                var exit = false
 
-                            val payload = withTimeoutOrNull(config.subscriptionTimeout) {
-                                while (true) {
-                                    val frame = incoming.receive()
-                                    if (frame is Frame.Text) {
-                                        val json = Json.decodeFromString<WebsocketTransportMessage>(frame.readText())
-                                        if (json.type != WebsocketTransportMessageType.CONNECTION_INIT) {
-                                            close(CloseReason(4400, "No connection init message"))
-                                            exit = true
-                                        } else {
-                                            return@withTimeoutOrNull json
+                                val payload = withTimeoutOrNull(config.subscriptionTimeout) {
+                                    while (true) {
+                                        val frame = incoming.receive()
+                                        if (frame is Frame.Text) {
+                                            val json = Json.decodeFromString<WebsocketTransportMessage>(frame.readText())
+                                            if (json.type != WebsocketTransportMessageType.CONNECTION_INIT) {
+                                                close(CloseReason(4400, "No connection init message"))
+                                                exit = true
+                                            } else {
+                                                return@withTimeoutOrNull json
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            if (exit) return@webSocket
-                            if (payload == null) {
-                                close(CloseReason(4408, "Connection initialisation timeout"))
-                                return@webSocket
-                            }
+                                if (exit) return@webSocket
+                                if (payload == null) {
+                                    close(CloseReason(4408, "Connection initialisation timeout"))
+                                    return@webSocket
+                                }
 
-                            outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.CONNECTION_ACK))))
+                                outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.CONNECTION_ACK))))
 
-                            val contexts = config.contexts.mapValues { (_, v) -> v(call) }.toMutableMap()
-                            contexts[typeOf<ApplicationCall>()] = call
-                            val listeners = mutableMapOf<String, Job>()
+                                val contexts = config.contexts.mapValues { (_, v) -> v(call) }.toMutableMap()
+                                contexts[typeOf<ApplicationCall>()] = call
+                                val listeners = mutableMapOf<String, Job>()
 
-                            coroutineScope {
-                                for (frame in incoming) {
-                                    if (frame is Frame.Text) {
-                                        val json = Json.decodeFromString<WebsocketTransportMessage>(frame.readText())
-                                        when (json.type) {
-                                            WebsocketTransportMessageType.PING -> {
-                                                outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.PONG))))
-                                            }
-
-                                            WebsocketTransportMessageType.PONG -> {}
-                                            WebsocketTransportMessageType.SUBSCRIBE -> {
-                                                if (json.id == null || json.payload == null) {
-                                                    close(CloseReason(4400, "id or payload missing"))
-                                                    break
+                                coroutineScope {
+                                    for (frame in incoming) {
+                                        if (frame is Frame.Text) {
+                                            val json = Json.decodeFromString<WebsocketTransportMessage>(frame.readText())
+                                            when (json.type) {
+                                                WebsocketTransportMessageType.PING -> {
+                                                    outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.PONG))))
                                                 }
 
-                                                if (json.id in listeners) {
-                                                    close(CloseReason(4409, "Subscribe for ${json.id} already exists"))
-                                                    break
-                                                }
+                                                WebsocketTransportMessageType.PONG -> {}
+                                                WebsocketTransportMessageType.SUBSCRIBE -> {
+                                                    if (json.id == null || json.payload == null) {
+                                                        close(CloseReason(4400, "id or payload missing"))
+                                                        break
+                                                    }
 
-                                                val flow = config.execute(json.payload.jsonObject, contexts)
-                                                listeners[json.id] = launch {
-                                                    flow.collect {
-                                                        val obj = it.jsonObject
-                                                        if ("errors" in obj) {
-                                                            outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.ERROR, json.id, obj["errors"]))))
-                                                            listeners.remove(json.id)?.cancel()
-                                                        } else {
-                                                            outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.NEXT, json.id, it))))
+                                                    if (json.id in listeners) {
+                                                        close(CloseReason(4409, "Subscribe for ${json.id} already exists"))
+                                                        break
+                                                    }
+
+                                                    val flow = config.execute(json.payload.jsonObject, contexts)
+                                                    listeners[json.id] = launch {
+                                                        flow.collect {
+                                                            val obj = it.jsonObject
+                                                            if ("errors" in obj) {
+                                                                outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.ERROR, json.id, obj["errors"]))))
+                                                                listeners.remove(json.id)?.cancel()
+                                                            } else {
+                                                                outgoing.send(Frame.Text(Json.encodeToString(WebsocketTransportMessage(WebsocketTransportMessageType.NEXT, json.id, it))))
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
-                                            WebsocketTransportMessageType.COMPLETE -> {
-                                                if (json.id == null) {
-                                                    close(CloseReason(4400, "id missing"))
-                                                    return@coroutineScope
+
+                                                WebsocketTransportMessageType.COMPLETE -> {
+                                                    if (json.id == null) {
+                                                        close(CloseReason(4400, "id missing"))
+                                                        return@coroutineScope
+                                                    }
+
+                                                    listeners.remove(json.id)?.cancel()
                                                 }
 
-                                                listeners.remove(json.id)?.cancel()
-                                            }
-                                            else -> {
-                                                close(CloseReason(4400, "Illegal message type"))
-                                                break
+                                                else -> {
+                                                    close(CloseReason(4400, "Illegal message type"))
+                                                    break
+                                                }
                                             }
                                         }
                                     }
-                                }
 
-                                for (key in listeners.keys.toList()) {
-                                    listeners.remove(key)?.cancel()
+                                    for (key in listeners.keys.toList()) {
+                                        listeners.remove(key)?.cancel()
+                                    }
+                                }
+                            }.onFailure {
+                                if (it !is ClosedReceiveChannelException && it !is ClosedSendChannelException) {
+                                    // Exception during execution, rethrow
+                                    throw it
                                 }
                             }
                         }
