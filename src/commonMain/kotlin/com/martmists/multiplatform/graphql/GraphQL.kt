@@ -11,6 +11,7 @@ import com.martmists.multiplatform.graphql.parser.ast.FragmentDefinition
 import com.martmists.multiplatform.graphql.parser.ast.OperationDefinition
 import com.martmists.multiplatform.graphql.parser.ast.OperationType
 import com.martmists.multiplatform.reflect.withNullability
+import io.ktor.util.collections.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -188,25 +189,25 @@ open class GraphQL {
     private suspend fun execute(operation: SchemaOperation, defMap: Map<String, Schema.OperationDefinition<*>>): JsonElement {
         require(operation !is Subscription)
 
-        return buildJsonObject {
-            val errors = mutableListOf<GraphQLException.GraphQLError>()
-            coroutineScope {
-                for (field in operation.fields) {
-                    launch {
-                        wrapper {
-                            try {
-                                put(field.alias ?: field.name, execute(operation, defMap[field.name] ?: throw GraphQLException("Cannot query field \"${field.name}\" on type \"${operation.type}\".", field.loc), field))
-                            } catch (e: GraphQLException) {
-                                errors += e.errors.map { it.withParent(field.alias ?: field.name) }
-                            }
+        val errors = mutableListOf<GraphQLException.GraphQLError>()
+        val map = ConcurrentMap<String, JsonElement>()
+        coroutineScope {
+            for (field in operation.fields) {
+                launch {
+                    wrapper {
+                        try {
+                            map[field.alias ?: field.name] = execute(operation, defMap[field.name] ?: throw GraphQLException("Cannot query field \"${field.name}\" on type \"${operation.type}\".", field.loc), field)
+                        } catch (e: GraphQLException) {
+                            errors += e.errors.map { it.withParent(field.alias ?: field.name) }
                         }
                     }
                 }
             }
-            if (errors.isNotEmpty()) {
-                throw GraphQLException(errors)
-            }
         }
+        if (errors.isNotEmpty()) {
+            throw GraphQLException(errors)
+        }
+        return JsonObject(map)
     }
 
     private fun parseVariables(ctx: SchemaRequestContext, field: Field, args: Map<String, KType>) {
@@ -283,12 +284,13 @@ open class GraphQL {
             else -> {
                 val kClass = type.classifier as KClass<*>
                 when (kClass) {
-                    List::class -> buildJsonArray {
+                    List::class -> {
                         val argType = type.arguments.first().type!!
                         val errors = mutableListOf<GraphQLException.GraphQLError>()
+                        val items = ConcurrentMap<Int, JsonElement>()
                         for ((i, item) in (obj as List<*>).withIndex()) {
                             try {
-                                add(mapJson(operation, item, argType, fields))
+                                items[i] = mapJson(operation, item, argType, fields)
                             } catch (e: GraphQLException) {
                                 errors += e.errors.map { it.withParent(i) }
                             }
@@ -296,9 +298,15 @@ open class GraphQL {
                         if (errors.isNotEmpty()) {
                             throw GraphQLException(errors)
                         }
+                        buildJsonArray {
+                            items.entries.sortedBy { it.key }.forEach { (_, v) ->
+                                add(v)
+                            }
+                        }
                     }
-                    else -> buildJsonObject {
+                    else -> {
                         val errors = mutableListOf<GraphQLException.GraphQLError>()
+                        val map = ConcurrentMap<String, JsonElement>()
                         coroutineScope {
                             for (field in fields) {
                                 launch {
@@ -310,10 +318,7 @@ open class GraphQL {
                                             @Suppress("UNCHECKED_CAST")
                                             val res = (prop.resolver as suspend Any?.(SchemaRequestContext) -> Any?)(obj, ctx)
                                             val retType = schema.interfaceMap[prop.ret.withNullability(false)]?.invoke(res) ?: prop.ret
-                                            put(
-                                                field.alias ?: field.name,
-                                                mapJson(operation, res, retType, ctx.expand(retType, field.selectionSet))
-                                            )
+                                            map[field.alias ?: field.name] = mapJson(operation, res, retType, ctx.expand(retType, field.selectionSet))
                                         } catch (e: GraphQLException) {
                                             errors += e.errors.map { it.withParent(field.alias ?: field.name) }
                                         }
@@ -324,6 +329,7 @@ open class GraphQL {
                         if (errors.isNotEmpty()) {
                             throw GraphQLException(errors)
                         }
+                        JsonObject(map)
                     }
                 }
             }
