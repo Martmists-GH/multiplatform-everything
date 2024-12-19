@@ -1,3 +1,4 @@
+import com.vanniktech.maven.publish.SonatypeHost
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -6,6 +7,8 @@ plugins {
     kotlin("plugin.serialization") version "2.0.21"
     id("com.android.library") version "8.6.0"  // Updating causes a weird Gradle error?
     `maven-publish`
+    id("org.jetbrains.dokka") version "2.0.0"
+    id("com.vanniktech.maven.publish") version "0.30.0"
 }
 
 group = "com.martmists.multiplatform-everything"
@@ -14,6 +17,7 @@ version = "1.1.7"
 allprojects {
     repositories {
         mavenCentral()
+        google()
     }
 }
 
@@ -122,6 +126,32 @@ tasks {
 
 
 if (findProperty("mavenToken") != null) {
+    fun MavenPom.configure() {
+        name = "NDArray.simd"
+        description = "Kotlin/Multiplatform NDArray with SIMD optimizations and low memory footprint"
+        url = "https://github.com/martmists-gh/multiplatform-everything"
+
+        licenses {
+            license {
+                name = "3-Clause BSD NON-AI License"
+                url = "https://github.com/non-ai-licenses/non-ai-licenses/blob/main/NON-AI-BSD3"
+                distribution = "repo"
+            }
+        }
+
+        developers {
+            developer {
+                id = "Martmists"
+                name = "Martmists"
+                url = "https://github.com/martmists-gh"
+            }
+        }
+
+        scm {
+            url = "https://github.com/martmists-gh/multiplatform-everything"
+        }
+    }
+
     publishing {
         repositories {
             maven {
@@ -131,7 +161,27 @@ if (findProperty("mavenToken") != null) {
                     username = "admin"
                     password = project.ext["mavenToken"]!! as String
                 }
+
             }
+        }
+
+        publications {
+            withType<MavenPublication> {
+                version = project.version as String
+                pom {
+                    configure()
+                }
+            }
+        }
+    }
+
+    mavenPublishing {
+        publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
+        coordinates(group as String, name, version as String)
+        signAllPublications()
+
+        pom {
+            configure()
         }
     }
 }
