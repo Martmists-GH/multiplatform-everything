@@ -36,10 +36,10 @@ Alternatively you can just lift the code you need as-is, provided you respect th
 
 > Note: For BigNum, you need to enable `CustomEqualsInValueClasses`:
 > ```kotlin
->    withType<KotlinCompile> {
->        compilerOptions {
->            jvmTarget = JvmTarget.JVM_17
->            freeCompilerArgs.add("-XXLanguage:+CustomEqualsInValueClasses")
->        }
->    }
+> withType<KotlinCompile> {
+>     compilerOptions {
+>         jvmTarget = JvmTarget.JVM_17
+>         freeCompilerArgs.add("-XXLanguage:+CustomEqualsInValueClasses")
+>     }
+> }
 > ```
