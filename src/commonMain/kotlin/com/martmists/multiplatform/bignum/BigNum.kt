@@ -33,8 +33,7 @@ value class BigNum private constructor(
     @Suppress("RESERVED_MEMBER_INSIDE_VALUE_CLASS")
     override operator fun equals(other: Any?): Boolean {
         @Suppress("FORBIDDEN_IDENTITY_EQUALS")  // `this` can somehow become null
-        if (this === null || other === null) return false
-        if (other is Number) return equals(BigNum(other))
+        if (other === null) return false
         if (other !is BigNum) return false
 
         if (isNaN() || other.isNaN()) return false
