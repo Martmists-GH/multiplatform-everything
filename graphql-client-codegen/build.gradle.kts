@@ -2,11 +2,11 @@ import com.strumenta.antlrkotlin.gradle.AntlrKotlinTask
 
 plugins {
     kotlin("jvm")
-    id("com.strumenta.antlr-kotlin") version "1.0.0"
+    id("com.strumenta.antlr-kotlin") version "1.0.2"
 }
 
 dependencies {
-    api("com.strumenta:antlr-kotlin-runtime:1.0.0")
+    api("com.strumenta:antlr-kotlin-runtime:1.0.2")
 }
 
 sourceSets {

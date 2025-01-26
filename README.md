@@ -18,6 +18,7 @@ Everything is licensed BSD 3-Clause (NON-AI), PRs are welcome.
   - Domain
 - Logger
   - Uses SLF4J on JVM/Android
+- BigNum (A loose port of OmegaNum)
 
 ## Maven artifacts
 
@@ -27,8 +28,18 @@ repositories {
 }
 
 dependencies {
-    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.1.7")
+    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.2.0")
 }
 ```
 
 Alternatively you can just lift the code you need as-is, provided you respect the LICENSE file.
+
+> Note: For BigNum, you need to enable `CustomEqualsInValueClasses`:
+> ```kotlin
+>    withType<KotlinCompile> {
+>        compilerOptions {
+>            jvmTarget = JvmTarget.JVM_17
+>            freeCompilerArgs.add("-XXLanguage:+CustomEqualsInValueClasses")
+>        }
+>    }
+> ```
