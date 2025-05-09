@@ -3,6 +3,8 @@ package com.martmists.multiplatform.graphql
 import com.martmists.multiplatform.graphql.ext.gqlName
 import com.martmists.multiplatform.reflect.withNullability
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.serializer
 import kotlin.enums.EnumEntries
 import kotlin.reflect.*
 
@@ -104,6 +106,7 @@ class SchemaBuilder {
 
     inner class TypeBuilder<T> internal constructor(private val type: KType): BaseTypeBuilder<T>() {
         private val interfaces = mutableListOf<KType>()
+        internal var serializer: KSerializer<T>? = null
 
         /**
          * Registers this type as inheriting the given interface type.
@@ -119,7 +122,7 @@ class SchemaBuilder {
                     type.withNullability(true).gqlName
                 }
             }
-            return Schema.TypeDefinition(type.withNullability(true).gqlName, description, type, properties, interfaces)
+            return Schema.TypeDefinition(type.withNullability(true).gqlName, description, type, properties, interfaces, serializer)
         }
     }
 
@@ -140,7 +143,7 @@ class SchemaBuilder {
                     typeResolver!!.invoke(this).withNullability(true).gqlName
                 }
             }
-            return Schema.TypeDefinition(type.withNullability(true).gqlName, description, type, properties, emptyList()) to typeResolver!!
+            return Schema.TypeDefinition(type.withNullability(true).gqlName, description, type, properties, emptyList(), null) to typeResolver!!
         }
     }
 
@@ -211,6 +214,16 @@ class SchemaBuilder {
     fun <T : Any> type(type: KType, block: @GraphQLDSL TypeBuilder<T>.() -> Unit) {
         val typeBuilder = TypeBuilder<T>(type)
         typeBuilder.block()
+        typeMap[type] = typeBuilder.build()
+    }
+
+    /**
+     * Registers a custom scalar.
+     */
+    inline fun <reified T : Any> scalar() = scalar(typeOf<T>(), serializer<T>())
+    fun <T : Any> scalar(type: KType, serializer: KSerializer<T>) {
+        val typeBuilder = TypeBuilder<T>(type)
+        typeBuilder.serializer = serializer
         typeMap[type] = typeBuilder.build()
     }
 

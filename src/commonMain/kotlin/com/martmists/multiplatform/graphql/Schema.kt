@@ -2,6 +2,7 @@ package com.martmists.multiplatform.graphql
 
 import com.martmists.multiplatform.graphql.ext.gqlName
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.KSerializer
 import kotlin.enums.EnumEntries
 import kotlin.reflect.KType
 
@@ -27,7 +28,8 @@ class Schema internal constructor(
         val description: String?,
         val type: KType,
         val properties: Map<String, PropertyDefinition<T, *>>,
-        val interfaces: List<KType>
+        val interfaces: List<KType>,
+        val scalarSerializer: KSerializer<T>?,
     )
 
     data class EnumDefinition<T : Enum<T>>(
@@ -82,6 +84,11 @@ class Schema internal constructor(
 
         for ((ref, type) in typeMap) {
             if (type.name.startsWith("__")) continue
+
+            if (type.scalarSerializer != null) {
+                sb.append("scalar ${type.name}\n")
+                continue
+            }
 
             val kind = if (ref in interfaceMap) "interface" else "type"
 

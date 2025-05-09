@@ -225,14 +225,14 @@ ${if (isOverride) "override " else ""}val $name: ${typeString(type)}
                 when (resolved.kind) {
                     TypeKind.SCALAR -> {
                         val start = "$name!!.jsonPrimitive"
-                        when (resolved.name) {
+                        when (val it = resolved.name) {
                             "ID", "String" -> "$start.content"
                             "Int" -> "$start.int"
                             "Long" -> "$start.long"
                             "Float" -> "$start.float"
                             "Double" -> "$start.double"
                             "Boolean" -> "$start.boolean"
-                            else -> throw NotImplementedError("Unknown scalar ${resolved.name}")
+                            else -> "$packageName.parse$it($start)"
                         }
                     }
                     TypeKind.ENUM -> {
