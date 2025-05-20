@@ -91,13 +91,11 @@ class SchemaBuilder {
          */
         inline fun <reified R> property(prop: KProperty1<T, R>, noinline builder: @GraphQLDSL BackedPropertyBuilder<T, R>.() -> Unit = {}) = property(prop.name, typeOf<R>(), prop, builder)
         fun <R> property(name: String, type: KType, builder: PropertyBuilder<T, R>.() -> Unit) {
-            requestedTypes.add(type.withNullability(false))
             val propBuilder = PropertyBuilder<T, R>(name, type)
             propBuilder.builder()
             properties[name] = propBuilder.build()
         }
         fun <R> property(name: String, type: KType, prop: KProperty1<T, R>, builder: @GraphQLDSL BackedPropertyBuilder<T, R>.() -> Unit) {
-            requestedTypes.add(type.withNullability(false))
             val propBuilder = BackedPropertyBuilder(name, type, prop)
             propBuilder.builder()
             properties[name] = propBuilder.build()
@@ -122,6 +120,7 @@ class SchemaBuilder {
                     type.withNullability(true).gqlName
                 }
             }
+            requestedTypes.addAll(properties.values.map { it.ret.withNullability(false) })
             return Schema.TypeDefinition(type.withNullability(true).gqlName, description, type, properties, interfaces, serializer)
         }
     }
@@ -143,6 +142,7 @@ class SchemaBuilder {
                     typeResolver!!.invoke(this).withNullability(true).gqlName
                 }
             }
+            requestedTypes.addAll(properties.values.map { it.ret.withNullability(false) })
             return Schema.TypeDefinition(type.withNullability(true).gqlName, description, type, properties, emptyList(), null) to typeResolver!!
         }
     }
