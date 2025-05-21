@@ -372,6 +372,7 @@ class SchemaBuilder {
                             type.classifier == List::class -> __TypeKind.LIST
                             enumMap.containsKey(nonNull) -> __TypeKind.ENUM
                             interfaceMap.containsKey(nonNull) -> __TypeKind.INTERFACE
+                            typeMap.containsKey(nonNull) && typeMap[nonNull]!!.scalarSerializer != null -> __TypeKind.SCALAR
                             typeMap.containsKey(nonNull) || type == typeOf<Query?>() || type == typeOf<Mutation?>() || type == typeOf<Subscription?>() -> __TypeKind.OBJECT
                             else -> __TypeKind.SCALAR
                         }
