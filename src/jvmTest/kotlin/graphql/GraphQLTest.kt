@@ -7,8 +7,16 @@ import graphql.schema.Character
 import graphql.schema.Droid
 import graphql.schema.Episode
 import graphql.schema.Human
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import org.intellij.lang.annotations.Language
+import java.util.UUID
 import kotlin.reflect.typeOf
 import kotlin.test.Test
 
@@ -109,6 +117,14 @@ class GraphQLTest {
                     }
                 }
 
+                query("humanByIndex") {
+                    val id = argument<Int>("id")
+
+                    resolver { ctx ->
+                        humans[ctx.id()]
+                    }
+                }
+
                 query("droid") {
                     val id = argument<String>("id")
 
@@ -116,12 +132,63 @@ class GraphQLTest {
                         droids.first { it.id == ctx.id() }
                     }
                 }
+
+                query("sameUUID") {
+                    val id = argument<UUID>("id")
+                    resolver {
+                        it.id()
+                    }
+                }
+
+                scalar<UUID>(object : KSerializer<UUID> {
+                    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("UUID", PrimitiveKind.STRING)
+
+                    override fun serialize(encoder: Encoder, value: UUID) {
+                        encoder.encodeString(value.toString())
+                    }
+
+                    override fun deserialize(decoder: Decoder): UUID {
+                        return UUID.fromString(decoder.decodeString())
+                    }
+                })
             }
         }
 
     @Test
     fun testSchemaGeneration() {
         println(gql.schema.graphqls())
+    }
+
+    @Test
+    fun testUUIDArg() {
+        runBlocking {
+            @Language("graphql")
+            val query = """
+query {
+  sameUUID(id: "c9cde07d-9982-4d62-ac7d-1876c4908585")
+}
+            """.trimIndent()
+            val res = gql.execute(query)
+
+            println(res.toList())
+        }
+    }
+
+    @Test
+    fun testIntArg() {
+        runBlocking {
+            @Language("graphql")
+            val query = """
+query {
+  humanByIndex(id: 1) {
+    name
+  }
+}
+            """.trimIndent()
+            val res = gql.execute(query)
+
+            println(res.toList())
+        }
     }
 
     @Test
@@ -146,7 +213,7 @@ fragment DroidFields on Droid {
             """.trimIndent()
             val res = gql.execute(query, "DroidFieldInFragment", emptyMap())
 
-            println(res)
+            println(res.toList())
         }
     }
 
@@ -248,7 +315,7 @@ fragment TypeRef on __Type {
 }
             """.trimIndent()
             val res = gql.execute(query, operationName, emptyMap())
-            println(res)
+            println(res.toList())
         }
     }
 }

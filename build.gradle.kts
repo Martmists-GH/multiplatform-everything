@@ -13,7 +13,7 @@ plugins {
 }
 
 group = "com.martmists.multiplatform-everything"
-version = "1.2.1"
+version = "1.2.2"
 
 allprojects {
     repositories {

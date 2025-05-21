@@ -58,9 +58,6 @@ class Schema internal constructor(
 
     fun graphqls(): String {
         val sb = StringBuilder()
-        sb.append("scalar Long\n")
-        sb.append("scalar Double\n\n")
-
         for ((_, enum) in enumMap) {
             if (enum.name.startsWith("__")) continue
 
@@ -86,7 +83,9 @@ class Schema internal constructor(
             if (type.name.startsWith("__")) continue
 
             if (type.scalarSerializer != null) {
-                sb.append("scalar ${type.name}\n")
+                if (type.name !in arrayOf("String", "Int", "Float", "Boolean")) {
+                    sb.append("scalar ${type.name}\n")
+                }
                 continue
             }
 

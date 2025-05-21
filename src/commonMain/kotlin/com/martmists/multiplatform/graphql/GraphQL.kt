@@ -8,16 +8,21 @@ import com.martmists.multiplatform.graphql.operation.Subscription
 import com.martmists.multiplatform.graphql.parser.*
 import com.martmists.multiplatform.graphql.parser.ast.Field
 import com.martmists.multiplatform.graphql.parser.ast.FragmentDefinition
+import com.martmists.multiplatform.graphql.parser.ast.IntValue
 import com.martmists.multiplatform.graphql.parser.ast.OperationDefinition
 import com.martmists.multiplatform.graphql.parser.ast.OperationType
+import com.martmists.multiplatform.graphql.parser.ast.StringValue
 import com.martmists.multiplatform.reflect.withNullability
 import io.ktor.util.collections.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import kotlin.reflect.KClass
 import kotlin.reflect.KType
+import kotlin.reflect.typeOf
 
 /**
  * A GraphQL Service.
@@ -217,11 +222,26 @@ open class GraphQL {
             }
             if (ctx.vars[argName] != null) {
                 val argVar = ctx.vars[argName]!!
-                val argValue = argVar.on(ctx, argType)
+                var argValue = argVar.on(ctx, argType)
                 if (argValue == null && !argType.isMarkedNullable) {
                     throw GraphQLException("Expected type ${argType.gqlName}, found null.", argVar.loc)
                 }
                 if (argValue != null) {
+                    // Special handling
+                    val argDef = schema.typeMap[argType.withNullability(false)]
+                    if (argDef?.scalarSerializer != null) {
+                        val arg = when (argValue) {
+                            is Int -> JsonPrimitive(argValue)
+                            is Long -> JsonPrimitive(argValue)
+                            is String -> JsonPrimitive(argValue)
+                            is Float -> JsonPrimitive(argValue)
+                            is Double -> JsonPrimitive(argValue)
+                            is Boolean -> JsonPrimitive(argValue)
+                            else -> error("Custom scalars only support other scalars as base types at the moment, got $argValue (${argValue::class})")
+                        }
+                        argValue = Json.decodeFromJsonElement(argDef.scalarSerializer, arg)
+                    }
+
                     if (!(argType.classifier!! as KClass<*>).isInstance(argValue)) {
                         throw GraphQLException("Expected type ${argType.gqlName}, found $argValue", argVar.loc)
                     }
@@ -305,31 +325,36 @@ open class GraphQL {
                         }
                     }
                     else -> {
-                        val errors = mutableListOf<GraphQLException.GraphQLError>()
-                        val map = ConcurrentMap<String, JsonElement>()
-                        coroutineScope {
-                            for (field in fields) {
-                                launch {
-                                    wrapper {
-                                        try {
-                                            val prop = def!!.properties[field.name] ?: throw GraphQLException("Unknown field: ${field.name}", field.loc)
-                                            val ctx = operation.context.withArguments(field.arguments)
-                                            parseVariables(ctx, field, prop.arguments)
-                                            @Suppress("UNCHECKED_CAST")
-                                            val res = (prop.resolver as suspend Any?.(SchemaRequestContext) -> Any?)(obj, ctx)
-                                            val retType = schema.interfaceMap[prop.ret.withNullability(false)]?.invoke(res) ?: prop.ret
-                                            map[field.alias ?: field.name] = mapJson(operation, res, retType, ctx.expand(retType, field.selectionSet))
-                                        } catch (e: GraphQLException) {
-                                            errors += e.errors.map { it.withParent(field.alias ?: field.name) }
+                        if (def!!.scalarSerializer != null) {
+                            @Suppress("MEMBER_PROJECTED_OUT")
+                            Json.encodeToJsonElement(def.scalarSerializer as KSerializer<Any?>, obj)
+                        } else {
+                            val errors = mutableListOf<GraphQLException.GraphQLError>()
+                            val map = ConcurrentMap<String, JsonElement>()
+                            coroutineScope {
+                                for (field in fields) {
+                                    launch {
+                                        wrapper {
+                                            try {
+                                                val prop = def!!.properties[field.name] ?: throw GraphQLException("Unknown field: ${field.name}", field.loc)
+                                                val ctx = operation.context.withArguments(field.arguments)
+                                                parseVariables(ctx, field, prop.arguments)
+                                                @Suppress("UNCHECKED_CAST")
+                                                val res = (prop.resolver as suspend Any?.(SchemaRequestContext) -> Any?)(obj, ctx)
+                                                val retType = schema.interfaceMap[prop.ret.withNullability(false)]?.invoke(res) ?: prop.ret
+                                                map[field.alias ?: field.name] = mapJson(operation, res, retType, ctx.expand(retType, field.selectionSet))
+                                            } catch (e: GraphQLException) {
+                                                errors += e.errors.map { it.withParent(field.alias ?: field.name) }
+                                            }
                                         }
                                     }
                                 }
                             }
+                            if (errors.isNotEmpty()) {
+                                throw GraphQLException(errors)
+                            }
+                            JsonObject(map)
                         }
-                        if (errors.isNotEmpty()) {
-                            throw GraphQLException(errors)
-                        }
-                        JsonObject(map)
                     }
                 }
             }

@@ -17,6 +17,15 @@ class SchemaBuilder {
     private val subscriptions = mutableMapOf<String, Schema.SubscriptionDefinition<*>>()
     private val requestedTypes = mutableSetOf<KType>()
 
+    init {
+        scalar<String>()
+        scalar<Long>()
+        scalar<Int>()
+        scalar<Float>()
+        scalar<Double>()
+        scalar<Boolean>()
+    }
+
     abstract class BaseBuilder internal constructor() {
         /**
          * A description for the property. This will be included in the schema.
@@ -220,7 +229,7 @@ class SchemaBuilder {
     /**
      * Registers a custom scalar.
      */
-    inline fun <reified T : Any> scalar() = scalar(typeOf<T>(), serializer<T>())
+    inline fun <reified T : Any> scalar(serializer: KSerializer<T> = serializer<T>()) = scalar(typeOf<T>(), serializer)
     fun <T : Any> scalar(type: KType, serializer: KSerializer<T>) {
         val typeBuilder = TypeBuilder<T>(type)
         typeBuilder.serializer = serializer
