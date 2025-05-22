@@ -3,17 +3,17 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("multiplatform") version "2.0.21"
-    kotlin("plugin.serialization") version "2.0.21"
-    id("com.android.library") version "8.6.0"  // Updating causes a weird Gradle error?
+    kotlin("multiplatform") version "2.1.21"
+    kotlin("plugin.serialization") version "2.1.21"
+    id("com.android.library") version "8.6.1"  // Updating causes a weird Gradle error?
     `maven-publish`
     id("org.jetbrains.dokka") version "2.0.0"
-    id("com.vanniktech.maven.publish") version "0.30.0"
+    id("com.vanniktech.maven.publish") version "0.31.0"
     id("com.github.ben-manes.versions") version "0.52.0"
 }
 
 group = "com.martmists.multiplatform-everything"
-version = "1.2.3"
+version = "1.2.4"
 
 allprojects {
     repositories {
@@ -43,10 +43,10 @@ kotlin {
             dependencies {
                 implementation(kotlin("stdlib"))
                 implementation(kotlin("reflect"))
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-                implementation("io.ktor:ktor-server-core:3.0.1")
-                implementation("io.ktor:ktor-server-websockets:3.0.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+                implementation("io.ktor:ktor-server-core:3.1.3")
+                implementation("io.ktor:ktor-server-websockets:3.1.3")
             }
         }
 
