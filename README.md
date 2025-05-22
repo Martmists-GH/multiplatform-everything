@@ -28,7 +28,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.2.4")
+    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.2.5")
 }
 ```
 

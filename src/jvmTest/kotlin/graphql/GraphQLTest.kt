@@ -175,6 +175,21 @@ query {
     }
 
     @Test
+    fun testUUIDVar() {
+        runBlocking {
+            @Language("graphql")
+            val query = """
+query(${'$'}id: UUID) {
+  sameUUID(id: ${'$'}id)
+}
+            """.trimIndent()
+            val res = gql.execute(query, data=mapOf("id" to "c9cde07d-9982-4d62-ac7d-1876c4908585"))
+
+            println(res.toList())
+        }
+    }
+
+    @Test
     fun testIntArg() {
         runBlocking {
             @Language("graphql")

@@ -51,7 +51,13 @@ class SchemaRequestContext(
         return contexts[type] as T?
     }
 
+    fun expand(arg: Value): Value {
+        return if (arg is Variable) {
+            vars[arg.name] ?: arg
+        } else arg
+    }
+
     internal fun withArguments(args: List<Argument>): SchemaRequestContext {
-        return SchemaRequestContext(schema, variableDefinitions, args.associate { it.name to it.value }, frags, contexts)
+        return SchemaRequestContext(schema, variableDefinitions, vars + args.associate { it.name to expand(it.value) }, frags, contexts)
     }
 }
