@@ -237,6 +237,7 @@ open class GraphQL {
                             is Float -> JsonPrimitive(argValue)
                             is Double -> JsonPrimitive(argValue)
                             is Boolean -> JsonPrimitive(argValue)
+                            is JsonElement -> argValue
                             else -> error("Custom scalars only support other scalars as base types at the moment, got $argValue (${argValue::class})")
                         }
                         argValue = Json.decodeFromJsonElement(argDef.scalarSerializer, arg)
