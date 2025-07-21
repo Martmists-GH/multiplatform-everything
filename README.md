@@ -12,6 +12,7 @@ Everything is licensed BSD 3-Clause (NON-AI), PRs are welcome.
   - Subscriptions use the [`graphql-transport-ws` protocol](https://github.com/enisdenjo/graphql-ws/blob/master/PROTOCOL.md).
   - JVM-only codegen (generates for multiplatform) is provided in the `graphql-client-codegen` directory.
   - Custom scalars only support encoding/decoding to primitive types
+- [Symbolic Computation](https://en.wikipedia.org/wiki/Computer_algebra)
 - Validation library
   - Email
   - URI
