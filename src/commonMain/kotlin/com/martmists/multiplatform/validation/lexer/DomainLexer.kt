@@ -1,5 +1,7 @@
 package com.martmists.multiplatform.validation.lexer
 
+import com.martmists.multiplatform.parsing.core.ABNFLexer
+
 class DomainLexer(contents: String) : ABNFLexer(contents) {
     fun consumeDomain(): String {
         return if (contents == " ") {

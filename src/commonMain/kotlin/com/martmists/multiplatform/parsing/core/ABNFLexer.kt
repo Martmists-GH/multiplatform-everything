@@ -1,4 +1,4 @@
-package com.martmists.multiplatform.validation.lexer
+package com.martmists.multiplatform.parsing.core
 
 abstract class ABNFLexer(contents: String) : Lexer(contents) {
     fun consumeAlpha(): String {

@@ -1,4 +1,4 @@
-package com.martmists.multiplatform.validation.lexer
+package com.martmists.multiplatform.parsing.core
 
 data class Loc(
     val line: Int,

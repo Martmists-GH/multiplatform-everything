@@ -1,5 +1,7 @@
 package com.martmists.multiplatform.validation.lexer
 
+import com.martmists.multiplatform.parsing.core.ABNFLexer
+
 class EmailLexer(contents: String, private val stripComments: Boolean = false) : ABNFLexer(contents) {
     fun consumeAddress(): String {
         val result = attemptTo { consumeMailbox() }

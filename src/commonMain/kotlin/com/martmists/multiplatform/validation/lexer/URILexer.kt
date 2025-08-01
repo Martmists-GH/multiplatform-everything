@@ -1,5 +1,7 @@
 package com.martmists.multiplatform.validation.lexer
 
+import com.martmists.multiplatform.parsing.core.ABNFLexer
+
 class URILexer(contents: String) : ABNFLexer(contents) {
     fun consumeURI(): String {
         val uri = StringBuilder()

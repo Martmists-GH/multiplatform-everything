@@ -13,6 +13,10 @@ Everything is licensed BSD 3-Clause (NON-AI), PRs are welcome.
   - JVM-only codegen (generates for multiplatform) is provided in the `graphql-client-codegen` directory.
   - Custom scalars only support encoding/decoding to primitive types
 - [Symbolic Computation](https://en.wikipedia.org/wiki/Computer_algebra)
+- Parsing tools
+  - Lexer
+  - ABNF Lexer
+  - XML Parser
 - Validation library
   - Email
   - URI
@@ -29,7 +33,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.2.7")
+    implementation("com.martmists.multiplatform-everything:multiplatform-everything:1.3.0")
 }
 ```
 

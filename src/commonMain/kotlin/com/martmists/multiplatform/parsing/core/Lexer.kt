@@ -1,4 +1,6 @@
-package com.martmists.multiplatform.validation.lexer
+package com.martmists.multiplatform.parsing.core
+
+import kotlin.text.iterator
 
 abstract class Lexer(protected val contents: String) : Iterator<Char> {
     protected var i = 0
@@ -79,7 +81,7 @@ abstract class Lexer(protected val contents: String) : Iterator<Char> {
     protected fun <T> between(range: IntRange, block: () -> T): List<T> {
         val found = mutableListOf<T>()
 
-        while (hasNext()) {
+        while (hasNext() && found.size < range.endInclusive) {
             attemptTo {
                 block()
             }?.let {

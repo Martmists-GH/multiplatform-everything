@@ -2,7 +2,7 @@ package com.martmists.multiplatform.graphql.parser.ast
 
 import com.martmists.multiplatform.graphql.SchemaRequestContext
 import com.martmists.multiplatform.reflect.withNullability
-import com.martmists.multiplatform.validation.lexer.Loc
+import com.martmists.multiplatform.parsing.core.Loc
 import kotlin.reflect.KType
 
 data class EnumValue(val value: String,
