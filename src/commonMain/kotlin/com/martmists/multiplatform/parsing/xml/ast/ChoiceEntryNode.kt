@@ -2,7 +2,7 @@ package com.martmists.multiplatform.parsing.xml.ast
 
 import com.martmists.multiplatform.parsing.core.Loc
 
-data class SNode(
-    val content: String,
+data class ChoiceEntryNode(
+    val items: List<CpNode>,
     override val loc: Loc
-) : MiscNode, IntSubsetNode
+) : CpEntryNode, ChildrenEntryNode

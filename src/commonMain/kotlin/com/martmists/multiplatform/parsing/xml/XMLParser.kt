@@ -166,7 +166,245 @@ class XMLParser(
     }
 
     private fun parseIntSubset(): List<IntSubsetNode> {
-        TODO()
+        return zeroOrMore {
+            attemptTo { parseElementDecl() }
+                ?: attemptTo { parseAttListDecl() }
+                ?: attemptTo { parseEntityDecl() }
+                ?: attemptTo { parseNotationDecl() }
+                ?: attemptTo { parsePI() }
+                ?: attemptTo { parseComment() }
+                ?: attemptTo { parsePEReference() }
+                ?: parseS()
+        }
+    }
+
+    private fun parseEntityDecl(): EntityDeclNode {
+        return attemptTo { parseGEDecl() } ?: parsePEDecl()
+    }
+
+    private fun parseGEDecl(): GEDeclNode {
+        val here = loc()
+        consume("<!ENTITIY")
+        parseS()
+        val name = parseName()
+        parseS()
+        val def = parseEntityDef()
+        optional { parseS() }
+        consume('>')
+        return GEDeclNode(name, def, here)
+    }
+
+    private fun parseEntityDef(): EntityDefNode {
+        val here = loc()
+        return attemptTo {
+            ValueEntityDefNode(parseEntityValue(), here)
+        } ?: run {
+            val id = parseExternalID()
+            val data = optional { parseNDataDecl() }
+            IdEntityDefNode(id, data, here)
+        }
+    }
+
+    private fun parseNDataDecl(): NDataDeclNode {
+        val here = loc()
+        parseS()
+        consume("NDATA")
+        parseS()
+        val name = parseName()
+        return NDataDeclNode(name, here)
+    }
+
+    private fun parsePEDef(): PEDefNode {
+        return attemptTo { parseEntityValue() } ?: parseExternalID()
+    }
+
+    private fun parseEntityValue(): EntityValueNode {
+        val here = loc()
+        val quot = attemptTo { consume('"') } ?: consume('\'')
+        val contents = zeroOrMore {
+            attemptTo {
+                require(peek() != '%' && peek() != '&' && peek() != quot)
+                next().toString()
+            } ?: parseReference().let {
+                when (it) {
+                    is EntityRefNode -> "&${it.name};"
+                    is PEReferenceNode -> "%${it.name};"
+                }
+            }
+        }.joinToString("")
+        consume(quot)
+        return EntityValueNode(contents, here)
+    }
+
+    private fun parsePEDecl(): PEDeclNode {
+        val here = loc()
+        consume("<!ENTITIY")
+        parseS()
+        consume('%')
+        parseS()
+        val name = parseName()
+        parseS()
+        val def = parsePEDef()
+        optional { parseS() }
+        consume('>')
+        return PEDeclNode(name, def, here)
+    }
+
+    private fun parseNotationDecl(): NotationDeclNode {
+        val here = loc()
+        consume("<!NOTATION")
+        parseS()
+        val name = parseName()
+        parseS()
+        val id = attemptTo { parseExternalID() } ?: run {
+            val here = loc()
+            consume("PUBLIC")
+            parseS()
+            val pub = attemptTo {
+                consume('"')
+                val s = consumeMatching(Regex("[ \r\na-zA-Z0-9\\-'()+,./:=?;!*#@\$_%]*"))
+                consume('"')
+                s
+            } ?: run {
+                consume('\'')
+                val s = consumeMatching(Regex("[ \r\na-zA-Z0-9\\-()+,./:=?;!*#@\$_%]*"))
+                consume('\'')
+                s
+            }
+            PublicIDNode(pub, here)
+        }
+        optional { parseS() }
+        consume('>')
+        return NotationDeclNode(name, id, here)
+    }
+
+    private fun parseAttListDecl(): AttListDeclNode {
+        val here = loc()
+        consume("<!ATTLIST")
+        parseS()
+        val name = parseName()
+        val attrs = zeroOrMore { parseAttDef() }
+        optional { parseS() }
+        consume('>')
+        return AttListDeclNode(name, attrs, here)
+    }
+
+    private fun parseAttDef(): AttDefNode {
+        val here = loc()
+        parseS()
+        val name = parseName()
+        parseS()
+        val type = attemptTo { consume("CDATA") }
+            ?: attemptTo { consume("ID") }
+            ?: attemptTo { consume("IDREF") }
+            ?: attemptTo { consume("IDREFS") }
+            ?: attemptTo { consume("ENTITY") }
+            ?: attemptTo { consume("ENTITIES") }
+            ?: attemptTo { consume("NMTOKEN") }
+            ?: attemptTo { consume("NMTOKENS") }
+            ?: attemptTo {
+                consume("NOTATION") + parseS() + consume('(') + (optional { parseS().content } ?: "") + parseName() + zeroOrMore { (optional { parseS().content } ?: "") + consume('|') + (optional { parseS().content } ?: "") + parseName() }.joinToString("") + (optional { parseS().content } ?: "") + consume(')')
+            } ?: run {
+                consume('(') + (optional { parseS().content } ?: "") + consumeMatching(nameRegex).also { require(it.isNotEmpty()) } + zeroOrMore { (optional { parseS().content } ?: "") + consume('|') + (optional { parseS().content } ?: "") + consumeMatching(nameRegex).also { require(it.isNotEmpty()) } } + (optional { parseS().content } ?: "") + consume(')')
+            }
+        parseS()
+        val default = attemptTo { consume("#REQUIRED") }
+            ?: attemptTo { consume("#IMPLIED") }
+            ?: ((optional { consume("#FIXED") + parseS().content } ?: "") + parseAttValue())
+        return AttDefNode(name, type, default, here)
+    }
+
+    private fun parseElementDecl(): ElementDeclNode {
+        val here = loc()
+        consume("<!ELEMENT")
+        parseS()
+        val name = parseName()
+        parseS()
+        val content = parseContentSpec()
+        optional { parseS() }
+        consume('>')
+        return ElementDeclNode(name, content, here)
+    }
+
+    private fun parseContentSpec(): ContentSpecNode {
+        val here = loc()
+        return attemptTo {
+            consume("EMPTY")
+            EmptyContentSpecNode(here)
+        } ?: attemptTo {
+            consume("ANY")
+            AnyContentSpecNode(here)
+        } ?: attemptTo {
+            parseMixed()
+        } ?: parseChildren()
+    }
+
+    private fun parseMixed(): MixedNode {
+        val here = loc()
+        consume('(')
+        parseS()
+        consume("#PCDATA")
+        val names = zeroOrMore {
+            optional { parseS() }
+            consume('|')
+            optional { parseS() }
+            parseName()
+        }
+        if (additionalValidation) {
+            require(names.toSet().size == names.size)
+        }
+        optional { parseS() }
+        consume(')')
+        if (names.isNotEmpty()) {
+            consume('*')
+        }
+        return MixedNode(names, here)
+    }
+
+    private fun parseCp(): CpNode {
+        val here = loc()
+        val node = attemptTo { NameEntryNode(parseName(), here) } ?: attemptTo { parseChoice() } ?: parseSeq()
+        val modifier = attemptTo { consume('?') } ?: attemptTo { consume('*') } ?: optional { consume('+') }
+        return CpNode(node, modifier, here)
+    }
+
+    private fun parseChildren(): ChildrenNode {
+        val here = loc()
+        val node = attemptTo { parseChoice() } ?: parseSeq()
+        val modifier = attemptTo { consume('?') } ?: attemptTo { consume('*') } ?: optional { consume('+') }
+        return ChildrenNode(node, modifier, here)
+    }
+
+    private fun parseChoice(): ChoiceEntryNode {
+        val here = loc()
+        consume('(')
+        optional { parseS() }
+        val item = parseCp()
+        val other = zeroOrMore {
+            parseS()
+            consume('|')
+            parseS()
+            parseCp()
+        }
+        parseS()
+        consume(')')
+        return ChoiceEntryNode(listOf(item, *other.toTypedArray()), here)
+    }
+
+    private fun parseSeq(): SeqEntryNode {
+        val here = loc()
+        consume('(')
+        optional { parseS() }
+        val item = parseCp()
+        val other = zeroOrMore {
+            parseS()
+            consume(',')
+            parseS()
+            parseCp()
+        }
+        parseS()
+        consume(')')
+        return SeqEntryNode(listOf(item, *other.toTypedArray()), here)
     }
 
     private fun parseElement(): ElementNode {

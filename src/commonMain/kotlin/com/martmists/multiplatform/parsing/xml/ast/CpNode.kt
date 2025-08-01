@@ -2,7 +2,8 @@ package com.martmists.multiplatform.parsing.xml.ast
 
 import com.martmists.multiplatform.parsing.core.Loc
 
-data class SNode(
-    val content: String,
+data class CpNode(
+    val node: CpEntryNode,
+    val modifier: Char?,
     override val loc: Loc
-) : MiscNode, IntSubsetNode
+) : AstNode

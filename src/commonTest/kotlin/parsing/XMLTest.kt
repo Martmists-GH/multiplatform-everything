@@ -3,15 +3,12 @@ package parsing
 import com.martmists.multiplatform.parsing.xml.XMLParser
 import kotlin.js.JsName
 import kotlin.test.Test
-import kotlin.time.Clock
-import kotlin.time.ExperimentalTime
+import kotlin.test.assertFails
 
 class XMLTest {
-    @OptIn(ExperimentalTime::class)
     @JsName("SimpleParsingTest")
     @Test
     fun `Simple Parsing Test`() {
-        val now = Clock.System.now()
         val text = """
             <?xml version="1.0" encoding="UTF-8"?>
             <note>
@@ -21,15 +18,12 @@ class XMLTest {
               <body>Don't forget me this weekend!</body>
             </note>
         """.trimIndent()
-        println(XMLParser.parse(text))
-        println(Clock.System.now() - now)
+        XMLParser.parse(text)
     }
 
-    @OptIn(ExperimentalTime::class)
     @JsName("NestedParsingTest")
     @Test
     fun `Nested Parsing Test`() {
-        val now = Clock.System.now()
         val text = """
             <?xml version="1.0" encoding="UTF-8"?>
             <breakfast_menu>
@@ -66,15 +60,12 @@ class XMLTest {
             </breakfast_menu>
 
         """.trimIndent()
-        println(XMLParser.parse(text))
-        println(Clock.System.now() - now)
+        XMLParser.parse(text)
     }
 
-    @OptIn(ExperimentalTime::class)
     @JsName("InvalidParsingTest")
     @Test
     fun `Invalid Parsing Test`() {
-        val now = Clock.System.now()
         val text = """
             <?xml version="1.0" encoding="UTF-8"?>
             <note>
@@ -84,7 +75,8 @@ class XMLTest {
               <body>Don't forget me this weekend!</body>
             </note>
         """.trimIndent()
-        println(XMLParser.parse(text))
-        println(Clock.System.now() - now)
+        assertFails {
+            XMLParser.parse(text)
+        }
     }
 }

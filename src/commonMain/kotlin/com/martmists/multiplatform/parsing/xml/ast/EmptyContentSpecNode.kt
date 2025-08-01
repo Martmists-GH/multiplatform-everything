@@ -2,7 +2,6 @@ package com.martmists.multiplatform.parsing.xml.ast
 
 import com.martmists.multiplatform.parsing.core.Loc
 
-data class SNode(
-    val content: String,
+data class EmptyContentSpecNode(
     override val loc: Loc
-) : MiscNode, IntSubsetNode
+) : ContentSpecNode
