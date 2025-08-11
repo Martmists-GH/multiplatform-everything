@@ -7,6 +7,9 @@ import com.martmists.multiplatform.symbolic.buildExpression
  * Represents a named variable.
  */
 data class Variable(private val latex: String) : Expression {
+    override val variables: Set<Variable>
+        get() = setOf(this)
+
     override fun evaluate(context: EvaluationContext): Expression = context.variables[latex] ?: this
 
     override fun latex(): String = latex

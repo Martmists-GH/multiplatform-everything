@@ -15,6 +15,9 @@ data class Function1(private val prefix: String, private val suffix: String,
     operator fun invoke(arg: Expression): Expression = SyntheticExpression(arg)
 
     inner class SyntheticExpression(val arg: Expression) : Expression {
+        override val variables: Set<Variable>
+            get() = arg.variables
+
         override fun evaluate(context: EvaluationContext): Expression {
             val na = arg.evaluate(context)
             return if (na is Literal) {

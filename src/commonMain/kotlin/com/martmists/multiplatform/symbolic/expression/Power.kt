@@ -8,6 +8,9 @@ import kotlin.math.pow
  * Represents `value ^ exponent`
  */
 data class Power(private val value: Expression, private val exponent: Expression): Expression {
+    override val variables: Set<Variable>
+        get() = value.variables + exponent.variables
+
     override fun evaluate(context: EvaluationContext): Expression {
         val nv = value.evaluate(context)
         val ne = exponent.evaluate(context)

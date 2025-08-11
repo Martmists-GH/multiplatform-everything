@@ -7,6 +7,9 @@ import com.martmists.multiplatform.symbolic.buildExpression
  * Represents a \sum.
  */
 data class Sum(private val loopVar: String, private val from: Expression, private val to: Expression, private val expression: Expression) : CompoundExpression {
+    override val variables: Set<Variable>
+        get() = from.variables + to.variables + expression.variables.filter { it.latex() != loopVar }
+
     override fun evaluate(context: EvaluationContext): Expression {
         val nf = from.evaluate(context)
         val nt = to.evaluate(context)

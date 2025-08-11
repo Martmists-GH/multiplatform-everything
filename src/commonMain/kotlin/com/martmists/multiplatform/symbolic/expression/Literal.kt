@@ -8,6 +8,9 @@ import kotlin.math.PI
  * Represents a number literal
  */
 open class Literal(val value: Double) : Expression {
+    override val variables: Set<Variable>
+        get() = emptySet()
+
     constructor(value: Number) : this(value.toDouble())
 
     init {

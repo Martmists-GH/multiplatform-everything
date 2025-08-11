@@ -16,6 +16,9 @@ open class Function2(private val prefix: String, private val suffix: String,
     open operator fun invoke(arg: Expression, arg2: Expression): Expression = SyntheticExpression(arg, arg2)
 
     open inner class SyntheticExpression(val arg: Expression, val arg2: Expression) : Expression {
+        override val variables: Set<Variable>
+            get() = arg.variables + arg2.variables
+
         override fun evaluate(context: EvaluationContext): Expression {
             val na1 = arg.evaluate(context)
             val na2 = arg2.evaluate(context)

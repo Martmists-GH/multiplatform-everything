@@ -7,6 +7,9 @@ import com.martmists.multiplatform.symbolic.buildExpression
  * Represents `lhs - rhs`
  */
 data class Minus(private val lhs: Expression, private val rhs: Expression): CompoundExpression {
+    override val variables: Set<Variable>
+        get() = lhs.variables + rhs.variables
+
     override fun evaluate(context: EvaluationContext): Expression {
         val nl = lhs.evaluate(context)
         val nr = rhs.evaluate(context)

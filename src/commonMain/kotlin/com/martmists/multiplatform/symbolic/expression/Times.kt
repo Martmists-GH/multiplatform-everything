@@ -7,6 +7,9 @@ import com.martmists.multiplatform.symbolic.buildExpression
  * Represents `lhs * rhs`
  */
 data class Times(private val lhs: Expression, private val rhs: Expression): CompoundExpression {
+    override val variables: Set<Variable>
+        get() = lhs.variables + rhs.variables
+
     override fun evaluate(context: EvaluationContext): Expression {
         val nl = lhs.evaluate(context)
         val nr = rhs.evaluate(context)
@@ -35,7 +38,7 @@ data class Times(private val lhs: Expression, private val rhs: Expression): Comp
         if (lhs is Literal && lhs.value == -1.0) return "-$rs"
         if (rhs is Literal && rhs.value == -1.0) return "-$ls"
 
-        return "$ls*$rs"
+        return "$ls \\times $rs"
     }
     
     /**

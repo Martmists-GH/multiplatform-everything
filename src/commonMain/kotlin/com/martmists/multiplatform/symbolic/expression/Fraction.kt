@@ -7,6 +7,9 @@ import com.martmists.multiplatform.symbolic.buildExpression
  * Represents `num / denom`
  */
 data class Fraction(private val num: Expression, private val denom: Expression): Expression {
+    override val variables: Set<Variable>
+        get() = num.variables + denom.variables
+
     override fun evaluate(context: EvaluationContext): Expression {
         val nn = num.evaluate(context)
         val nd = denom.evaluate(context)

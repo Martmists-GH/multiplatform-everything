@@ -35,6 +35,8 @@ interface Expression {
      */
     fun antiderivative(variable: String): Expression
 
+    val variables: Set<Variable>
+
     /**
      * Evaluate the expression with the given values for variables.
      */
