@@ -90,14 +90,15 @@ data class Power(private val value: Expression, private val exponent: Expression
             throw NotImplementedError("Antiderivative of x^f(x) is not implemented!")
         }
 
-        if (value is Literal && exponent.derivative(variable) != Literal(0)) {
+        val expDer = exponent.derivative(variable)
+        if ((value is Literal || (value is Variable && value.latex() != variable)) && expDer != Literal(0)) {
             if (exponent is Variable && exponent.latex() == variable) {
                 return@buildExpression this@Power / ln(value)
             }
-            
+
             throw NotImplementedError("Antiderivative of a^f(x) is not implemented!")
         }
-        
+
         throw NotImplementedError("A closed-form antiderivative does not exist! (if this is incorrect, let me know)")
     }
 }
